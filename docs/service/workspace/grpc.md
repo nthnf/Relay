@@ -1,0 +1,236 @@
+## gRPC Service Scope
+
+Workspace exposes synchronous workspace, membership, invitation, and channel-metadata commands plus bounded owner reads. `gateway` is the primary caller for end-user create, invite, join, member, and channel flows. These calls are authoritative access-control and membership decisions, not chat-like low-latency fanout.
+
+## Shared Contract Rules
+
+- Authenticated actor identity comes from `gateway`; callers must not be allowed to mutate another actor's workspace state by supplying arbitrary user IDs.
+- Workspace enforces workspace-local authorization at its own boundary using membership and role state it owns.
+- `owner_user_id` is the canonical ultimate authority for the workspace in v1. Role assignments delegate permissions to non-owner members, but the owner implicitly has all permissions regardless of explicit role assignment.
+- Owner transfer is not supported in v1, so the owner cannot be removed or self-remove through existing RPCs.
+- Workspace validates write-path target-user IDs with `identity` before issuing invitations or directly adding a member.
+- Membership is the source of truth for access to workspace channels; `chat` does not decide who belongs to a workspace.
+- Domain writes and matching `outbox_event` inserts happen in the same transaction.
+
+### `CreateWorkspace`
+
+**Main caller:** `gateway`
+
+**Request fields**
+
+- `actor_user_id` (`uuid`) - authenticated creator.
+- `name` (`string`) - workspace display name.
+
+**Response fields**
+
+- `workspace_id` (`uuid`)
+- `name` (`string`)
+- `owner_user_id` (`uuid`)
+- `created_at` (`timestamp`)
+- `initial_member_user_id` (`uuid`)
+
+**Contract notes**
+
+- Create the `workspace` row and the creator's `workspace_member` row in one transaction.
+- Seed any required system role data for the creator in the same transaction when role bootstrapping is enabled.
+- Insert a matching `WorkspaceCreated` outbox row before commit.
+
+### `GetWorkspace`
+
+**Main caller:** `gateway`
+
+**Request fields**
+
+- `actor_user_id` (`uuid`)
+- `workspace_id` (`uuid`)
+
+**Response fields**
+
+- `workspace_id` (`uuid`)
+- `name` (`string`)
+- `owner_user_id` (`uuid`)
+- `member_count` (`int32`) - count of active memberships only.
+- `channel_count` (`int32`) - count of current `workspace_channel` rows in v1.
+- `created_at` (`timestamp`)
+
+**Contract notes**
+
+- Return only if the actor is an active member of the workspace.
+- This is a bounded owner read from workspace-owned tables, not a cross-domain aggregate.
+
+### `ListWorkspacesForUser`
+
+**Main caller:** `gateway`
+
+**Request fields**
+
+- `actor_user_id` (`uuid`)
+- `page_size` (`int32 optional`)
+- `page_token` (`string optional`)
+
+**Response fields**
+
+- `workspaces` (`repeated message`) with `workspace_id`, `name`, `member_count`, `channel_count`, `joined_at`
+- `next_page_token` (`string optional`)
+
+**Contract notes**
+
+- Return only active memberships for `actor_user_id`.
+- `member_count` counts active memberships only; `channel_count` counts current `workspace_channel` rows in v1.
+- Ordering should be stable and documented by implementation, even if `bootstrap` later becomes the main UI query path.
+
+### `CreateChannel`
+
+**Main caller:** `gateway`
+
+**Request fields**
+
+- `actor_user_id` (`uuid`)
+- `workspace_id` (`uuid`)
+- `name` (`string`)
+- `channel_kind` (`string`)
+- `position` (`int32 optional`) - omitted means append using the next available ordering value.
+
+**Response fields**
+
+- `channel_id` (`uuid`)
+- `workspace_id` (`uuid`)
+- `name` (`string`)
+- `channel_kind` (`string`)
+- `position` (`int32`)
+- `created_at` (`timestamp`)
+
+**Contract notes**
+
+- Require the actor to be an active member with workspace-owned permission to create channels.
+- Reject duplicate active channel names within the same workspace.
+- If `position` is omitted, assign the next available ordering value within the workspace.
+- Reject duplicate active `position` values within the same workspace in v1.
+- V1 does not define a reorder RPC; callers should treat returned positions as stable sidebar ordering metadata.
+- Insert the `workspace_channel` row and matching `WorkspaceChannelCreated` outbox row in one transaction.
+
+### `ListChannels`
+
+**Main caller:** `gateway`
+
+**Request fields**
+
+- `actor_user_id` (`uuid`)
+- `workspace_id` (`uuid`)
+
+**Response fields**
+
+- `channels` (`repeated message`) with `channel_id`, `name`, `channel_kind`, `position`, `created_at`
+
+**Contract notes**
+
+- Return only channels for workspaces where the actor has active membership.
+- Order by `position` ascending, then `channel_id` as a stable tiebreaker.
+- `position` values are expected to be unique among active channels within a workspace in v1 because duplicate create-time positions are rejected.
+- This method returns metadata only; message previews and unread counts belong to `bootstrap` or `chat`-driven projections.
+
+### `AddMember`
+
+**Main caller:** `gateway`
+
+**Request fields**
+
+- `actor_user_id` (`uuid`)
+- `workspace_id` (`uuid`)
+- `target_user_id` (`uuid`)
+
+**Response fields**
+
+- `workspace_id` (`uuid`)
+- `user_id` (`uuid`)
+- `joined_at` (`timestamp`)
+- `added_by_user_id` (`uuid`) - direct adds use the acting member; invitation acceptance uses the invitation issuer.
+
+**Contract notes**
+
+- Require the actor to have workspace-owned permission to add members directly.
+- Validate `target_user_id` existence through `identity` before inserting membership.
+- Reject or return idempotent success when the target user is already an active member; do not create duplicate memberships.
+- On success, create the `workspace_member` row and matching `WorkspaceMemberAdded` outbox row in one transaction.
+
+### `RemoveMember`
+
+**Main caller:** `gateway`
+
+**Request fields**
+
+- `actor_user_id` (`uuid`)
+- `workspace_id` (`uuid`)
+- `target_user_id` (`uuid`)
+
+**Response fields**
+
+- `removed` (`bool`)
+- `workspace_id` (`uuid`)
+- `user_id` (`uuid`)
+- `removed_at` (`timestamp optional`)
+
+**Contract notes**
+
+ - Require the actor to have workspace-owned permission to remove another non-owner member.
+- Non-owner members may self-remove in v1.
+- Direct removal of the owner is disallowed in v1.
+- Owner self-removal is disallowed in v1 because owner transfer is not yet defined.
+- Remove or deactivate matching `workspace_member_role` rows in the same transaction as membership removal.
+- This method is idempotent: if no active membership exists, return `removed = false`.
+- Successful removal inserts a `WorkspaceMemberRemoved` outbox row.
+
+### `IssueInvitation`
+
+**Main caller:** `gateway`
+
+**Request fields**
+
+- `actor_user_id` (`uuid`)
+- `workspace_id` (`uuid`)
+- `target_user_id` (`uuid`)
+- `expires_at` (`timestamp`)
+
+**Response fields**
+
+- `workspace_invitation_id` (`uuid`)
+- `workspace_id` (`uuid`)
+- `issued_to_user_id` (`uuid`)
+- `issued_by_user_id` (`uuid`)
+- `status` (`string`)
+- `expires_at` (`timestamp`)
+- `created_at` (`timestamp`)
+
+**Contract notes**
+
+- Require the actor to have workspace-owned permission to invite members.
+- Validate `target_user_id` existence through `identity` before inserting the invitation row.
+- Reject if the target user is already an active member.
+- Reject if an active pending invitation already exists for `(workspace_id, target_user_id)`.
+- The emitted `WorkspaceInvitationIssued` event must include `workspace_name_snapshot` from workspace-owned state plus `inviter_display_name_snapshot` and `invitee_email` resolved during the issue flow so downstream email delivery stays self-contained in v1.
+- On success, insert the `workspace_invitation` row and matching `WorkspaceInvitationIssued` outbox row in one transaction.
+
+### `AcceptInvitation`
+
+**Main caller:** `gateway`
+
+**Request fields**
+
+- `actor_user_id` (`uuid`)
+- `workspace_invitation_id` (`uuid`)
+
+**Response fields**
+
+- `workspace_id` (`uuid`)
+- `workspace_invitation_id` (`uuid`)
+- `user_id` (`uuid`)
+- `joined_at` (`timestamp`)
+- `accepted_at` (`timestamp`)
+- `added_by_user_id` (`uuid`) - set to the invitation issuer recorded on the accepted invitation.
+
+**Contract notes**
+
+- Only the invited user may accept the invitation.
+- Reject if the invitation is not `pending` or if `expires_at` has passed.
+- Reject or return idempotent success if the invited user is already an active member before acceptance.
+- On success, mark the invitation accepted, create the `workspace_member` row with `added_by_user_id = issued_by_user_id`, and insert `WorkspaceInvitationAccepted` plus `WorkspaceMemberAdded` outbox rows in one transaction.

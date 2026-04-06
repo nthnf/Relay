@@ -1,0 +1,386 @@
+openapi: 3.1.0
+info:
+  title: Gateway API
+  version: 0.1.0
+  summary: Public edge HTTP contract for the thin gateway service.
+servers:
+  - url: https://api.example.com
+    description: Public edge endpoint through Traefik and gateway
+tags:
+  - name: Auth
+  - name: Realtime
+paths:
+  /v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user account
+      operationId: register
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registration accepted and session issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequestResponse'
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitedResponse'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableResponse'
+        '500':
+          $ref: '#/components/responses/InternalErrorResponse'
+  /v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate with email and password
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Session issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitedResponse'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableResponse'
+        '500':
+          $ref: '#/components/responses/InternalErrorResponse'
+  /v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke the current session
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Session revoked
+        '401':
+          $ref: '#/components/responses/UnauthenticatedResponse'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableResponse'
+        '500':
+          $ref: '#/components/responses/InternalErrorResponse'
+  /v1/me:
+    get:
+      tags: [Auth]
+      summary: Return the authenticated actor context
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current authenticated actor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedResponse'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableResponse'
+        '500':
+          $ref: '#/components/responses/InternalErrorResponse'
+  /v1/realtime/tickets:
+    post:
+      tags: [Realtime]
+      summary: Mint a short-lived signed token for websocket admission
+      description: >-
+        The gateway validates the caller's bearer token, applies edge auth context,
+        and returns a signed token that the client presents when opening a realtime
+        websocket connection. For v1 this is a signed token handshake, not a persisted
+        database-backed ticket lookup. The token audience is `realtime`, the issuer is
+        `gateway`, the TTL is 30 seconds, and the token is reusable until expiry.
+      operationId: createRealtimeTicket
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RealtimeTicketRequest'
+      responses:
+        '201':
+          description: Realtime ticket issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealtimeTicketResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthenticatedResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitedResponse'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailableResponse'
+        '500':
+          $ref: '#/components/responses/InternalErrorResponse'
+components:
+  parameters:
+    IdempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Required by clients that want safe retry semantics for unauthenticated `POST /v1/auth/register`; the key is bound to the canonical request hash with `actor_id = null` in v1.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    InvalidRequestResponse:
+      description: Invalid request shape or validation failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            invalidRequest:
+              value:
+                error:
+                  code: INVALID_REQUEST
+                  message: Request validation failed.
+                  request_id: req_123
+    UnauthenticatedResponse:
+      description: Missing, expired, or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            unauthenticated:
+              value:
+                error:
+                  code: UNAUTHENTICATED
+                  message: Authentication is required.
+                  request_id: req_123
+    ConflictResponse:
+      description: Public conflict, including invalid idempotency key reuse
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            conflict:
+              value:
+                error:
+                  code: CONFLICT
+                  message: Resource already exists.
+                  request_id: req_123
+            invalidIdempotencyKey:
+              value:
+                error:
+                  code: INVALID_IDEMPOTENCY_KEY
+                  message: Idempotency key was reused with a different request payload.
+                  request_id: req_123
+    RateLimitedResponse:
+      description: Edge rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            rateLimited:
+              value:
+                error:
+                  code: RATE_LIMITED
+                  message: Too many requests. Try again later.
+                  request_id: req_123
+    UpstreamUnavailableResponse:
+      description: Required upstream unavailable or timed out
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            upstreamUnavailable:
+              value:
+                error:
+                  code: UPSTREAM_UNAVAILABLE
+                  message: Upstream service is unavailable.
+                  request_id: req_123
+    InternalErrorResponse:
+      description: Unexpected gateway failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            internalError:
+              value:
+                error:
+                  code: INTERNAL_ERROR
+                  message: An unexpected error occurred.
+                  request_id: req_123
+  schemas:
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [email, username, password]
+      properties:
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+    AuthSessionResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [actor, access_token, expires_at]
+          properties:
+            actor:
+              $ref: '#/components/schemas/Actor'
+            access_token:
+              type: string
+              description: Bearer token for subsequent gateway requests
+            expires_at:
+              type: string
+              format: date-time
+    MeResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Actor'
+    Actor:
+      type: object
+      additionalProperties: false
+      required: [id, email, username]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+    RealtimeTicketRequest:
+      type: object
+      additionalProperties: false
+      required: [connection_type, client_instance_id]
+      properties:
+        connection_type:
+          type: string
+          enum: [websocket]
+        client_instance_id:
+          type: string
+          format: uuid
+          description: Required client-generated identifier bound into the signed ticket and checked during websocket admission
+        last_event_id:
+          type: string
+          description: Optional resume cursor forwarded to realtime if later supported
+    RealtimeTicketResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [ticket, expires_at, websocket_url, presentation]
+          properties:
+            ticket:
+              type: string
+              description: Short-lived signed token with required claims `iss`, `aud`, `sub`, `session_id`, `client_instance_id`, `jti`, `iat`, and `exp`
+            expires_at:
+              type: string
+              format: date-time
+            websocket_url:
+              type: string
+              format: uri
+              description: Public websocket endpoint routed through Traefik to the gateway websocket entrypoint
+            presentation:
+              type: object
+              additionalProperties: false
+              required: [transport, query_parameter, reusable_until_expiry]
+              properties:
+                transport:
+                  type: string
+                  enum: [query_parameter]
+                query_parameter:
+                  type: string
+                  const: ticket
+                reusable_until_expiry:
+                  type: boolean
+                  const: true
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - INVALID_REQUEST
+                - UNAUTHENTICATED
+                - CONFLICT
+                - INVALID_IDEMPOTENCY_KEY
+                - RATE_LIMITED
+                - UPSTREAM_UNAVAILABLE
+                - INTERNAL_ERROR
+            message:
+              type: string
+            request_id:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
