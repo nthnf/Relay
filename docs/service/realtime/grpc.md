@@ -105,7 +105,7 @@ Realtime exposes hot-path delivery methods used after durable writes already suc
 
 ### `DisconnectActorSessions`
 
-**Main caller:** `identity`, `workspace`, or `gateway` through an internal control path
+**Main caller:** `identity`, `workspace`, or an external application server control path through Envoy Gateway
 
 **Latency-sensitive:** yes
 

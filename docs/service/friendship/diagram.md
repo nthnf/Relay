@@ -2,7 +2,8 @@
 
 ```mermaid
 flowchart LR
-    Client[Client] --> Gateway[gateway]
+    Browser[Browser Client] --> App[External SvelteKit]
+    App --> Gateway[Envoy Gateway]
     Gateway -->|gRPC CreateFriendRequest / AcceptFriendRequest / RejectFriendRequest| Friendship[friendship]
     Gateway -->|gRPC RemoveFriend / BlockUser / UnblockUser / ListFriends / ListPendingRequests| Friendship
 
@@ -26,7 +27,7 @@ flowchart LR
 
 Notes:
 
-- `gateway` owns the authenticated public edge; friendship owns relationship state and invariants.
+- Envoy Gateway owns backend ingress policy; friendship owns relationship state, invariants, and service-boundary authorization.
 - Friendship writes domain rows and `outbox_event` rows in the same local Postgres transaction.
 - RabbitMQ publication is asynchronous and is the durable path that lets `bootstrap` converge accepted-friend projections after friendship writes.
 - V1 bootstrap scope here is accepted-friend projection maintenance only; pending-request and block state remain friendship-owned and are not projected by bootstrap.

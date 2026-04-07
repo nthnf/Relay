@@ -1,6 +1,6 @@
 ## Purpose
 
-Chat owns durable message writes and message-history state for both workspace channels and direct-message conversations in v1. It is the source of truth for messages, edits, deletes, reactions, and minimal DM conversation metadata behind `gateway`, while using a direct synchronous notification to `realtime` only for low-latency message-create fanout after durable write success.
+Chat owns durable message writes and message-history state for both workspace channels and direct-message conversations in v1. It is the source of truth for messages, edits, deletes, reactions, and minimal DM conversation metadata when called by external application servers through Envoy Gateway, while using a direct synchronous notification to `realtime` only for low-latency message-create fanout after durable write success.
 
 ## Owned Responsibilities
 
@@ -23,7 +23,7 @@ Chat owns durable message writes and message-history state for both workspace ch
 
 ## Dependencies
 
-- **gateway** for authenticated send, edit, delete, history, and reaction commands routed to chat gRPC.
+- **external application server through Envoy Gateway** for authenticated send, edit, delete, history, and reaction commands routed to chat gRPC.
 - **workspace** for synchronous channel and membership authorization checks where the chat write path must confirm actor access to the target channel.
 - **identity** as the owner of stable `user_id` references used for direct-conversation participants and message actors.
 - **realtime** for best-effort synchronous low-latency fanout after a durable message-create write succeeds.

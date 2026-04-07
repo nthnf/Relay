@@ -1,6 +1,6 @@
 ## Purpose
 
-Workspace owns workspace containers, membership, roles, invitations, and channel metadata. It is the write-side source of truth for who belongs to a workspace and which channels exist inside it behind `gateway`.
+Workspace owns workspace containers, membership, roles, invitations, and channel metadata. It is the write-side source of truth for who belongs to a workspace and which channels exist inside it when called by external application servers through Envoy Gateway.
 
 ## Owned Responsibilities
 
@@ -15,12 +15,12 @@ Workspace owns workspace containers, membership, roles, invitations, and channel
 
 - Owning message bodies, message delivery, or unread state; `chat` owns durable message writes and `bootstrap` owns aggregated unread projections.
 - Owning realtime connection state or websocket fanout; `realtime` only consumes selected workspace events.
-- Acting as the public HTTP edge; `gateway` owns client-facing routing and auth context.
+- Acting as the public HTTP edge; external application servers reach workspace through Envoy Gateway, while workspace keeps service-owned authorization.
 - Replacing `bootstrap` as the canonical UI-facing aggregate read service for workspace lists and sidebars.
 
 ## Dependencies
 
-- **gateway** for authenticated workspace, membership, invitation, and channel commands routed to workspace gRPC.
+- **external application server through Envoy Gateway** for authenticated workspace, membership, invitation, and channel commands routed to workspace gRPC.
 - **RabbitMQ** for durable cold-path publication of workspace events.
 - **outbox worker sidecar** for polling local `outbox_event` rows and publishing them.
 - **Postgres** as the service-owned source of truth for workspaces, memberships, roles, invitations, and channels.

@@ -28,7 +28,7 @@ Semantic rules:
 
 - This registry is node-local and ephemeral.
 - A reconnect may land on a different node and create a different `session_id`.
-- The registry is populated during websocket attach after `gateway` authentication succeeds.
+- The registry is populated during websocket attach after ingress authentication succeeds and realtime accepts the connection.
 
 ### `target_subscription_map`
 

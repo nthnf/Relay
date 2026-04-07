@@ -1,10 +1,11 @@
 ## gRPC Service Scope
 
-Workspace exposes synchronous workspace, membership, invitation, and channel-metadata commands plus bounded owner reads. `gateway` is the primary caller for end-user create, invite, join, member, and channel flows. These calls are authoritative access-control and membership decisions, not chat-like low-latency fanout.
+Workspace exposes synchronous workspace, membership, invitation, and channel-metadata commands plus bounded owner reads. External application servers through Envoy Gateway are the primary callers for end-user create, invite, join, member, and channel flows. These calls are authoritative access-control and membership decisions, not chat-like low-latency fanout.
 
 ## Shared Contract Rules
 
-- Authenticated actor identity comes from `gateway`; callers must not be allowed to mutate another actor's workspace state by supplying arbitrary user IDs.
+- Authenticated actor identity is derived from ingress-authenticated request context; callers must not be allowed to mutate another actor's workspace state by supplying arbitrary user IDs.
+- External application callers do not supply actor identity in request payloads for end-user actions; the transport boundary or a trusted backend caller context attaches it out-of-band.
 - Workspace enforces workspace-local authorization at its own boundary using membership and role state it owns.
 - `owner_user_id` is the canonical ultimate authority for the workspace in v1. Role assignments delegate permissions to non-owner members, but the owner implicitly has all permissions regardless of explicit role assignment.
 - Owner transfer is not supported in v1, so the owner cannot be removed or self-remove through existing RPCs.
@@ -14,11 +15,10 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 
 ### `CreateWorkspace`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
-- `actor_user_id` (`uuid`) - authenticated creator.
 - `name` (`string`) - workspace display name.
 
 **Response fields**
@@ -37,11 +37,10 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 
 ### `GetWorkspace`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
-- `actor_user_id` (`uuid`)
 - `workspace_id` (`uuid`)
 
 **Response fields**
@@ -55,16 +54,15 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 
 **Contract notes**
 
-- Return only if the actor is an active member of the workspace.
+- Return only if the authenticated actor is an active member of the workspace.
 - This is a bounded owner read from workspace-owned tables, not a cross-domain aggregate.
 
 ### `ListWorkspacesForUser`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
-- `actor_user_id` (`uuid`)
 - `page_size` (`int32 optional`)
 - `page_token` (`string optional`)
 
@@ -75,17 +73,16 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 
 **Contract notes**
 
-- Return only active memberships for `actor_user_id`.
+- Return only active memberships for the authenticated actor.
 - `member_count` counts active memberships only; `channel_count` counts current `workspace_channel` rows in v1.
 - Ordering should be stable and documented by implementation, even if `bootstrap` later becomes the main UI query path.
 
 ### `CreateChannel`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
-- `actor_user_id` (`uuid`)
 - `workspace_id` (`uuid`)
 - `name` (`string`)
 - `channel_kind` (`string`)
@@ -111,11 +108,10 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 
 ### `ListChannels`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
-- `actor_user_id` (`uuid`)
 - `workspace_id` (`uuid`)
 
 **Response fields**
@@ -124,18 +120,17 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 
 **Contract notes**
 
-- Return only channels for workspaces where the actor has active membership.
+- Return only channels for workspaces where the authenticated actor has active membership.
 - Order by `position` ascending, then `channel_id` as a stable tiebreaker.
 - `position` values are expected to be unique among active channels within a workspace in v1 because duplicate create-time positions are rejected.
 - This method returns metadata only; message previews and unread counts belong to `bootstrap` or `chat`-driven projections.
 
 ### `AddMember`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
-- `actor_user_id` (`uuid`)
 - `workspace_id` (`uuid`)
 - `target_user_id` (`uuid`)
 
@@ -155,11 +150,10 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 
 ### `RemoveMember`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
-- `actor_user_id` (`uuid`)
 - `workspace_id` (`uuid`)
 - `target_user_id` (`uuid`)
 
@@ -182,11 +176,10 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 
 ### `IssueInvitation`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
-- `actor_user_id` (`uuid`)
 - `workspace_id` (`uuid`)
 - `target_user_id` (`uuid`)
 - `expires_at` (`timestamp`)
@@ -212,11 +205,10 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 
 ### `AcceptInvitation`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
-- `actor_user_id` (`uuid`)
 - `workspace_invitation_id` (`uuid`)
 
 **Response fields**

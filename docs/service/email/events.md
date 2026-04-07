@@ -41,7 +41,7 @@ Email consumes durable integration events from RabbitMQ and records local send s
 - `issued_by_user_id`
 - `inviter_display_name_snapshot`
 - `invitee_email`
-- `workspace_invitation_id` is also the v1 link material needed for the signed-in gateway acceptance flow
+- `workspace_invitation_id` is also the v1 link material needed for the signed-in external application acceptance flow
 - `expires_at`
 - `created_at`
 

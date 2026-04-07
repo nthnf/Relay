@@ -10,7 +10,7 @@ As a newly registered user, I can redeem the email verification token issued for
 
 ## Keep a valid session until it expires or is revoked
 
-As an authenticated user, I keep using my session until its `expires_at` passes or identity revokes it, and the gateway can verify that session through identity without reading shared database state; if my account is disabled, identity invalidates my active sessions and future verification fails.
+As an authenticated user, I keep using my session until its `expires_at` passes or identity revokes it, and the external application server can verify that session through identity via Envoy Gateway without reading shared database state; if my account is disabled, identity invalidates my active sessions and future verification fails.
 
 ## Keep client-bound sessions tied to the issuing client instance
 

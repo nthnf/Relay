@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-traffic-policy-placeholder
+  namespace: relay-system
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: relay
+data:
+  README.md: |
+    Placeholder only.
+
+    This ConfigMap marks where Envoy Gateway traffic policy for retries, timeouts,
+    and rate-limit-like behavior will be added later.
+
+    The final traffic policy for relay gRPC surfaces is intentionally not finalized here.
+    Replace this placeholder with reviewed BackendTrafficPolicy resources once service
+    SLOs and policy defaults are agreed.
+  example-backendtrafficpolicy.yaml: |
+    # Example only; do not apply as final policy without policy review.
+    apiVersion: gateway.envoyproxy.io/v1alpha1
+    kind: BackendTrafficPolicy
+    metadata:
+      name: grpc-smoke-traffic-example
+      namespace: relay-system
+    spec:
+      targetRefs:
+        - group: gateway.networking.k8s.io
+          kind: GRPCRoute
+          name: grpc-smoke
+      timeout:
+        http:
+          requestTimeout: 5s
+      # Retry and rate-limit details are intentionally omitted here until
+      # relay service policy defaults are reviewed and approved.

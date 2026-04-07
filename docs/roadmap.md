@@ -2,15 +2,17 @@
 
 ## Phase 1: Platform Foundations
 - Stand up a local kind cluster with namespaces, ingress pathing, and baseline developer workflow.
-- Add local dependencies: Traefik, RabbitMQ, Redis for edge rate limiting plus approved `realtime` presence state, and per-service Postgres instances.
-- Define the `gateway` service boundary and base routing contract from Traefik to internal gRPC services.
+- Add local dependencies: Envoy Gateway, RabbitMQ, Redis for approved edge rate limiting plus approved `realtime` presence state, and per-service Postgres instances.
+- Stand up Envoy Gateway as the backend ingress for the cluster and define baseline routing from externally reachable backend routes to internal gRPC services.
 - Bootstrap per-service Postgres provisioning and migration conventions.
 - Define and document the shared poll-based outbox worker pattern, including the standard `outbox_event` table contract and sidecar deployment shape.
 - Deliver minimum delivery operations for RabbitMQ and outbox processing: bounded retry behavior, dead-letter routing, and baseline observability for publisher/consumer failures.
 
 ## Phase 2: Identity And Access
 - Deliver `identity` service contracts for user identity, credential flows, token issuance, and service-to-service auth expectations.
-- Implement the `gateway` and identity boundary: client traffic enters via Traefik, reaches `gateway`, and is authenticated before internal forwarding.
+- Define which backend gRPC surfaces are externally reachable by SvelteKit and which remain internal-only.
+- Define ingress authentication, rate-limiting, and route policy boundaries in Envoy Gateway.
+- Preserve service-owned authorization and domain invariants inside backend services instead of shifting them into ingress policy.
 - Define user account persistence in the identity-owned Postgres database.
 - Document synchronous gRPC contracts needed for authenticated internal requests and other immediate authoritative decisions.
 - Apply the Phase 1 retry, dead-letter, and observability conventions to identity-owned asynchronous flows before depending on them elsewhere.

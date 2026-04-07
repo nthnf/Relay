@@ -1,13 +1,15 @@
 ```mermaid
 flowchart LR
-    Client[Client]
-    Gateway[gateway]
+    Client[Browser Client]
+    App[External SvelteKit]
+    Gateway[Envoy Gateway]
     Bootstrap[bootstrap]
     RabbitMQ[RabbitMQ]
     Projections[(bootstrap projections\nuser_home_projection\nfriend_projection\nworkspace_projection\nworkspace_channel_projection\nuser_unread_counter)]
 
-    Client -->|HTTP GET bootstrap reads| Gateway
-    Gateway -->|hot-path query call| Bootstrap
+    Client -->|HTTP app request| App
+    App -->|approved backend gRPC read| Gateway
+    Gateway -->|GetHome / ListFriends / ListWorkspaces / GetWorkspaceSidebar| Bootstrap
     Bootstrap -->|read denormalized rows| Projections
 
     RabbitMQ -->|UserRegistered\nUserProfileUpdated\nFriendRequestAccepted\nFriendshipRemoved\nWorkspaceCreated\nWorkspaceMemberAdded\nWorkspaceMemberRemoved\nWorkspaceChannelCreated\nMessageCreated\nMessageEdited\nMessageDeleted| Bootstrap

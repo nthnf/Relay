@@ -152,7 +152,7 @@ Semantic rules:
 - `identity` owns every `user_id` referenced by `owner_user_id`, `user_id`, `issued_to_user_id`, `issued_by_user_id`, `added_by_user_id`, `assigned_by_user_id`, and `created_by_user_id`.
 - Workspace must synchronously validate write-path target users through `identity` before issuing invitations or directly adding members.
 - Invitation issuance may also resolve recipient email and inviter display-name snapshots during the write flow so `WorkspaceInvitationIssued` stays self-contained for downstream email delivery.
-- `gateway` forwards authenticated workspace commands to workspace; workspace does not trust arbitrary client-supplied actor identity.
+- External application servers call workspace through Envoy Gateway; workspace does not trust arbitrary caller-supplied actor identity and must authorize from ingress-authenticated request context at its own boundary.
 - `bootstrap` consumes `WorkspaceCreated`, `WorkspaceMemberAdded`, `WorkspaceMemberRemoved`, and `WorkspaceChannelCreated` to maintain member-visible workspace and channel projections.
 - `realtime` consumes selected membership and channel events to update connected clients after durable publication.
 - Workspace inserts durable integration events into its local `outbox_event` table in the same transaction as the source write.

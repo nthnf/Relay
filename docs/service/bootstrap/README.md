@@ -19,7 +19,7 @@ Bootstrap is the platform's hot-path query service for UI bootstrap reads. It is
 
 ## Dependencies
 
-- **gateway** for public HTTP entry and auth context propagation.
+- **external SvelteKit server runtime through Envoy Gateway** for approved backend gRPC reads used to assemble UI responses.
 - **RabbitMQ** for durable upstream event delivery.
 - **identity** events for account bootstrap data.
 - **friendship** events for accepted friendship projections.
@@ -32,20 +32,20 @@ Bootstrap is the platform's hot-path query service for UI bootstrap reads. It is
 - Projection tables are optimized for denormalized reads, not normalized write ownership.
 - Redis is not required by default for v1.
 
-## HTTP Surface
+## gRPC Surface
 
-- `GET /v1/bootstrap/home`
-- `GET /v1/bootstrap/friends`
-- `GET /v1/bootstrap/workspaces`
-- `GET /v1/bootstrap/workspaces/{workspaceId}/sidebar`
+- `GetHome`
+- `ListFriends`
+- `ListWorkspaces`
+- `GetWorkspaceSidebar`
 
-All HTTP contracts are documented in `openapi.yml`.
+See `grpc.md` for request and response contracts.
 
-V1 HTTP semantics:
+V1 read semantics:
 
 - User-scoped collection reads return `200` with empty collections or zero-count defaults when a projection has not materialized yet.
-- `GET /v1/bootstrap/home` returns the latest available projected snapshot for the authenticated actor and does not use `404` for projection lag.
-- `GET /v1/bootstrap/workspaces/{workspaceId}/sidebar` returns `404` only when bootstrap has no evidence the actor can access the workspace; otherwise it returns `200` with the latest available projected snapshot, including an empty `channels` array if channel rows lag.
+- `GetHome` returns the latest available projected snapshot for the authenticated actor and does not use not-found semantics for projection lag.
+- `GetWorkspaceSidebar` returns not found only when bootstrap has no evidence the actor can access the workspace; otherwise it returns the latest available projected snapshot, including an empty `channels` collection if channel rows lag.
 - Collection ordering is stable and contractual: friends sort by `sort_username` ascending then `friend_user_id`, workspaces sort by `last_activity_at` descending then `workspace_id`, and sidebar channels sort by `position` ascending then `channel_id`.
 
 ## Event Dependencies

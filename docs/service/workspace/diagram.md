@@ -2,7 +2,8 @@
 
 ```mermaid
 flowchart LR
-    Client[Client] --> Gateway[gateway]
+    Browser[Browser Client] --> App[External SvelteKit]
+    App --> Gateway[Envoy Gateway]
     Gateway -->|gRPC CreateWorkspace / GetWorkspace / ListWorkspacesForUser| Workspace[workspace]
     Gateway -->|gRPC CreateChannel / ListChannels / AddMember / RemoveMember| Workspace
     Gateway -->|gRPC IssueInvitation / AcceptInvitation| Workspace
@@ -34,7 +35,7 @@ flowchart LR
 
 Notes:
 
-- `gateway` owns the authenticated public edge; workspace owns membership, invitation, role, and channel-metadata invariants.
+- Envoy Gateway owns backend ingress policy; workspace owns membership, invitation, role, channel-metadata invariants, and service-boundary authorization.
 - Workspace writes domain rows and `outbox_event` rows in the same local Postgres transaction.
 - RabbitMQ publication is asynchronous and is the durable path that lets `bootstrap` and `realtime` converge after workspace writes.
 - `chat` is intentionally absent from this diagram because workspace owns channel metadata and membership, not message persistence.

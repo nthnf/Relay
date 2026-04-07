@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-policy-placeholder
+  namespace: relay-system
+  labels:
+    app.kubernetes.io/name: envoy-gateway
+    app.kubernetes.io/part-of: relay
+data:
+  README.md: |
+    Placeholder only.
+
+    This ConfigMap marks where Envoy Gateway auth / ext-auth policy wiring will be added later.
+    The Relay auth model and attachment strategy are intentionally not finalized in this file.
+
+    When the auth contract is approved, replace this placeholder with the real Envoy Gateway
+    SecurityPolicy resource(s) that target the intended GRPCRoute objects.
+  example-securitypolicy.yaml: |
+    # Example only; do not apply as final policy without auth design approval.
+    apiVersion: gateway.envoyproxy.io/v1alpha1
+    kind: SecurityPolicy
+    metadata:
+      name: identity-auth-example
+      namespace: relay-system
+    spec:
+      targetRefs:
+        - group: gateway.networking.k8s.io
+          kind: GRPCRoute
+          name: identity
+      # Placeholder sketch only. extAuth / jwt / oidc details are intentionally omitted
+      # until the relay auth model and trust boundaries are finalized.

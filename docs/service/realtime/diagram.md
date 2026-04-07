@@ -2,7 +2,8 @@
 
 ```mermaid
 flowchart LR
-    Client[Client] --> Gateway[gateway]
+    Browser[Browser Client] --> App[External SvelteKit]
+    App --> Gateway[Envoy Gateway]
     Gateway -->|authenticated websocket upgrade| Realtime[realtime]
     Realtime -->|attach/subscribe populates routes| Routes[In-memory session registry and subscription maps]
 
@@ -37,6 +38,7 @@ flowchart LR
 Notes:
 
 - `chat -> realtime` gRPC is the low-latency path for already committed channel and DM writes.
+- Envoy Gateway is the backend ingress and policy boundary for websocket attach; realtime still owns connected-session routing and delivery behavior.
 - Routing state is ephemeral and populated by websocket attach/subscribe after auth; stale routes are pruned when upstream ownership changes converge.
 - RabbitMQ consumption is the backup and recovery path when direct fanout fails or is delayed for active sessions.
 - Full reconnect history catch-up is not performed by realtime; clients must reload from chat/bootstrap reads after reconnect.

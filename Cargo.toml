@@ -10,7 +10,6 @@ members = [
   "services/chat",
   "services/email",
   "services/friendship",
-  "services/gateway",
   "services/identity",
   "services/realtime",
   "services/workspace",
@@ -19,7 +18,6 @@ members = [
 
 [workspace.dependencies]
 tokio = { version = "1.51.0", features = ["macros", "rt-multi-thread"] }
-actix-web = "4.13.0"
 sea-orm = { version = "2.0.0-rc", features = [
   "sqlx-postgres",
   "runtime-tokio-rustls",

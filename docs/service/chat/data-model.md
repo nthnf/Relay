@@ -143,7 +143,7 @@ Semantic rules:
 
 - `workspace` owns `workspace_id` and `channel_id`; chat references them for authorization context and event payloads but does not own membership or channel metadata.
 - `identity` owns `author_user_id`, `created_by_user_id`, `editor_user_id`, `deleted_by_user_id`, `last_edited_by_user_id`, and `user_id` participant or reaction references.
-- `gateway` forwards authenticated message commands to chat; chat must not trust arbitrary client-supplied actor identity.
+- External application servers call chat through Envoy Gateway; chat must not trust arbitrary caller-supplied actor identity and must authorize from ingress-authenticated request context at its own boundary.
 - Chat authorizes direct-message reads and writes from `direct_conversation_member` rows it owns.
 - `realtime` receives best-effort synchronous notify calls after durable writes and also consumes durable chat events for repair or catch-up behavior.
 - `bootstrap` and other downstream consumers materialize projections from durable chat events rather than querying chat tables directly.

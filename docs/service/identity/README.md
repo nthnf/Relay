@@ -1,6 +1,6 @@
 ## Purpose
 
-Identity owns user accounts, credentials, profile basics, email verification state, and session lifecycle. It is the source of truth for account and auth-related state behind the public `gateway` edge.
+Identity owns user accounts, credentials, profile basics, email verification state, and session lifecycle. It is the source of truth for account and auth-related state called by external application servers through Envoy Gateway.
 
 ## Owned Responsibilities
 
@@ -14,14 +14,15 @@ Identity owns user accounts, credentials, profile basics, email verification sta
 
 ## Non-Goals
 
-- Acting as the public HTTP edge; `gateway` owns client-facing auth routes.
+- Acting as the public HTTP edge; external application servers reach identity through Envoy Gateway.
+- Envoy Gateway handles backend ingress policy; identity retains service-owned authorization and account/session ownership at its own boundary.
 - Owning cross-domain aggregates, friend graphs, workspaces, channels, or chat state.
 - Providing a shared cross-service database for user lookups.
 - Replacing `bootstrap` as the canonical UI-facing aggregate read service.
 
 ## Dependencies
 
-- **gateway** for public registration, login, logout, and current-user routing.
+- **external application server through Envoy Gateway** for public registration, login, logout, and current-user routing.
 - **RabbitMQ** for durable cold-path publication of identity integration events.
 - **outbox worker sidecar** for polling local `outbox_event` rows and publishing them.
 - **Postgres** as the service-owned source of truth for accounts, credentials, sessions, and verification tokens.

@@ -1,6 +1,6 @@
 ## Purpose
 
-Realtime owns websocket connection handling, low-latency fanout to connected clients, online/offline presence state, and selected connected-session control flows behind `gateway`. It is a delivery service, not the durable authority for chat messages or workspace membership.
+Realtime owns websocket connection handling, low-latency fanout to connected clients, online/offline presence state, and selected connected-session control flows for external application callers routed through Envoy Gateway. It is a delivery service, not the durable authority for chat messages or workspace membership.
 
 ## Owned Responsibilities
 
@@ -19,9 +19,14 @@ Realtime owns websocket connection handling, low-latency fanout to connected cli
 - Treating websocket delivery success as a prerequisite for durable message success.
 - Introducing a broader stream-processing or analytics system in v1.
 
+## Boundary Notes
+
+- Envoy Gateway handles backend ingress policy.
+- Realtime retains service-owned session/control and delivery authorization responsibility at its own boundary.
+
 ## Dependencies
 
-- **gateway** for authenticated websocket upgrade routing and session context forwarding.
+- **external application server through Envoy Gateway** for authenticated websocket upgrade routing and session context forwarding.
 - **chat** for synchronous low-latency `PublishChannelMessage` and `PublishDirectMessage` fanout calls after durable writes commit.
 - **workspace** as the owner of durable membership and channel-change events consumed for connected-client refresh and session eviction.
 - **identity** as the owner of stable `user_id` references used for actor/session targeting.

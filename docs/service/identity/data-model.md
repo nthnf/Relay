@@ -44,7 +44,7 @@ Semantic rules:
 
 - `user_profile.user_id` is a 1:1 relation with `user_account.user_id`.
 - `username` must be unique because downstream services and projections may use it as a stable display field.
-- Profile basics published in events must come from this table, not duplicated gateway state.
+- Profile basics published in events must come from this table, not duplicated edge-session state.
 
 ### `user_credential_password`
 
@@ -63,7 +63,7 @@ Semantic rules:
 
 - Exactly zero or one active password credential row exists per `user_id` in v1.
 - `password_hash` stores only the derived hash string including algorithm parameters and salt.
-- Password verification happens only inside identity; gateway never inspects hashes.
+- Password verification happens only inside identity; the ingress layer never inspects hashes.
 
 ### `user_session`
 
@@ -120,7 +120,7 @@ Semantic rules:
 ## Cross-Service References
 
 - Other services store `user_id` as the stable foreign reference only; they must not duplicate credential or session tables.
-- `gateway` uses identity gRPC for registration, password authentication, session verification, and session revocation.
-- `gateway` also calls identity to redeem email verification tokens and update profile basics for authenticated users.
+- External application servers call identity through Envoy Gateway for registration, password authentication, session verification, and session revocation.
+- External application servers also call identity through Envoy Gateway to redeem email verification tokens and update profile basics for authenticated users.
 - `bootstrap` and other consumers use identity events or approved lookup RPCs for profile basics.
 - Durable identity events are inserted into the local `outbox_event` table within the same transaction as the source write.

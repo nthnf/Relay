@@ -2,7 +2,8 @@
 
 ```mermaid
 flowchart LR
-    C[Client] --> G[gateway]
+    B[Browser Client] --> A[External SvelteKit]
+    A --> G[Envoy Gateway]
     G -->|gRPC RegisterUser / AuthenticatePassword / VerifySession / RevokeSession| I[identity]
     G -->|gRPC RedeemEmailVerificationToken / UpdateUserProfile| I
 
@@ -26,11 +27,12 @@ flowchart LR
     W -->|publish durable events| R[RabbitMQ]
     R --> B[bootstrap and other consumers]
 
-    G -->|uses session result as edge auth context| Ctx[forwarded actor context]
+    G -->|forwards ingress-authenticated request context for authenticated RPCs| Ctx[request actor context]
 ```
 
 Notes:
 
-- `gateway` owns the public auth edge but not account or session persistence.
+- Envoy Gateway owns backend ingress policy, while identity owns account and session persistence.
+- `RegisterUser` and `AuthenticatePassword` are unauthenticated entry RPCs; authenticated actor context applies to session-bound and profile-bound calls only.
 - Identity writes domain rows and `outbox_event` rows in the same local Postgres transaction, including initial email verification token issuance and profile/email-verification updates.
-- RabbitMQ publication is asynchronous and does not replace the synchronous registration or session result returned to `gateway`.
+- RabbitMQ publication is asynchronous and does not replace the synchronous registration or session result returned to the external caller through Envoy Gateway.

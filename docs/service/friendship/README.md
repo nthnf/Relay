@@ -1,6 +1,6 @@
 ## Purpose
 
-Friendship owns friend requests, accepted friendships, user blocks, and the relationship state transitions between two users. It is the write-side source of truth for interpersonal relationship state behind `gateway`.
+Friendship owns friend requests, accepted friendships, user blocks, and the relationship state transitions between two users. It is the write-side source of truth for interpersonal relationship state called by external application servers through Envoy Gateway.
 
 ## Owned Responsibilities
 
@@ -13,13 +13,13 @@ Friendship owns friend requests, accepted friendships, user blocks, and the rela
 ## Non-Goals
 
 - Owning user account or profile data; `identity` remains the source of truth for user basics.
-- Serving the public HTTP edge; `gateway` owns client-facing routing and auth context.
+- Serving the public HTTP edge; external application servers reach friendship through Envoy Gateway, while friendship keeps service-owned authorization.
 - Acting as the canonical UI aggregate read service; `bootstrap` owns projection-backed friend-list reads.
 - Inventing followers, groups, recommendations, or other social features outside direct bilateral relationships.
 
 ## Dependencies
 
-- **gateway** for authenticated friend and block commands routed to friendship gRPC.
+- **external application server through Envoy Gateway** for authenticated friend and block commands routed to friendship gRPC.
 - **RabbitMQ** for durable cold-path publication of relationship events.
 - **outbox worker sidecar** for polling local `outbox_event` rows and publishing them.
 - **Postgres** as the service-owned source of truth for requests, friendship edges, and blocks.
@@ -61,7 +61,7 @@ See `events.md` for payload and publication rules.
 - Friend requests are directional: requester and addressee are not interchangeable on the request row.
 - Accepted friendships are symmetric: v1 stores one edge per direction so reads stay user-scoped and simple.
 - Blocking takes precedence over normal friend flows. If either direction is blocked, the pair cannot create or accept a friend request.
-- Friendship validates write-path target users against `identity` before creating a friend request or block. `gateway` may pre-validate, but friendship still enforces the invariant at its own boundary.
+- Friendship validates write-path target users against `identity` before creating a friend request or block. Upstream callers may pre-validate, but friendship still enforces the invariant at its own boundary.
 - If `identity` reports the target user does not exist, friendship rejects the write and does not persist orphaned `friend_request`, `friendship_edge`, or `user_block` rows.
 - `BlockUser` removes any accepted friendship edges for the pair and clears pending requests in either direction in the same local transaction.
 - `UnblockUser` removes only the caller-owned block row; it does not restore prior friendship or pending request state.

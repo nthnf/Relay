@@ -1,9 +1,13 @@
 ## gRPC Service Scope
 
-Identity exposes synchronous account, session, and profile-basic contracts. Gateway is the primary caller for auth flows; bootstrap and selected internal services may use profile lookup methods when a direct owner lookup is justified. These calls are authoritative request/response flows, not chat-like low-latency fanout.
+Identity exposes synchronous account, session, and profile-basic contracts. External application servers through Envoy Gateway are the primary callers for auth flows; `bootstrap` and selected internal services may use profile lookup methods when a direct owner lookup is justified. These calls are authoritative request/response flows, not chat-like low-latency fanout.
 
 ## Shared Contract Rules
 
+- Authenticated end-user RPCs derive actor/session context from ingress-authenticated request context.
+- Unauthenticated auth-entry RPCs such as `RegisterUser` and `AuthenticatePassword` do not require an already-authenticated actor.
+- Internal bounded lookup RPCs such as `GetUsersByIds` are internal service calls and are not ingress-authenticated end-user actions.
+- Identity still enforces its own service-boundary rules and authorization semantics where applicable.
 - `RegisterUser` creates `user_account.account_status = active` only in v1.
 - `AuthenticatePassword` must reject accounts where `account_status = disabled`.
 - `VerifySession` must return `valid = false` for revoked sessions, expired sessions, or any session whose owning account is `disabled`.
@@ -13,7 +17,7 @@ Identity exposes synchronous account, session, and profile-basic contracts. Gate
 
 ### `RegisterUser`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
@@ -22,7 +26,7 @@ Identity exposes synchronous account, session, and profile-basic contracts. Gate
 - `username` (`string`)
 - `display_name` (`string`)
 - `avatar_url` (`string optional`)
-- `idempotency_key` (`string optional`) - forwarded for tracing only; gateway remains the idempotency owner.
+- `idempotency_key` (`string optional`) - forwarded for tracing only; the external caller remains the idempotency owner.
 
 **Response fields**
 
@@ -41,7 +45,7 @@ Identity exposes synchronous account, session, and profile-basic contracts. Gate
 
 ### `AuthenticatePassword`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
@@ -67,7 +71,7 @@ Identity exposes synchronous account, session, and profile-basic contracts. Gate
 
 ### `VerifySession`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
@@ -86,12 +90,12 @@ Identity exposes synchronous account, session, and profile-basic contracts. Gate
 **Contract notes**
 
 - Identity resolves the token to `user_session`, verifies `session_secret_hash`, and rejects expired, revoked, or disabled-account sessions.
-- `gateway` uses the returned actor context; session ownership remains in identity.
+- The external application caller uses the returned actor/session context for subsequent authenticated flows; session ownership remains in identity.
 - If the stored session row has a non-null `client_instance_id`, a missing request value or mismatched request value returns `valid = false`.
 
 ### `RevokeSession`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
@@ -110,7 +114,7 @@ Identity exposes synchronous account, session, and profile-basic contracts. Gate
 
 ### `RedeemEmailVerificationToken`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
@@ -130,7 +134,7 @@ Identity exposes synchronous account, session, and profile-basic contracts. Gate
 
 ### `UpdateUserProfile`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 
@@ -153,7 +157,7 @@ Identity exposes synchronous account, session, and profile-basic contracts. Gate
 
 ### `GetUserProfile`
 
-**Main caller:** `gateway`
+**Main caller:** external application server through Envoy Gateway
 
 **Request fields**
 

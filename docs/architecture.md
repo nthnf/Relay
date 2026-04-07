@@ -2,22 +2,26 @@
 
 ## System Shape
 - System style: Rust-heavy microservices platform modeled after a Discord-like product.
-- Edge traffic flows through Traefik into `gateway`.
+- Browser traffic reaches an external SvelteKit application rather than entering the cluster directly.
+- SvelteKit may call approved backend gRPC services from its server runtime through Envoy Gateway when it needs an immediate authoritative backend answer.
+- Backend traffic enters the Kubernetes cluster through Envoy Gateway, which is the ingress and policy boundary for exposed backend routes.
 - Synchronous internal calls use gRPC when the caller needs an immediate authoritative answer; only a subset are truly latency-sensitive.
 - Durable cross-service propagation uses RabbitMQ on the cold path with eventual consistency.
 - `bootstrap` is the canonical UI-facing aggregated read service for cross-domain, projection-backed queries.
 - Runtime cross-service fanout reads are not the default pattern for aggregates owned by `bootstrap`.
 
 ## Edge Path
-- Traefik routes external traffic to `gateway`.
-- `gateway` is the only default north-south entrypoint for client traffic.
-- `gateway` terminates edge concerns such as authentication enforcement, request shaping, and service routing.
-- `gateway` forwards sync calls to internal gRPC services.
+- Browser clients talk to the external SvelteKit application, not directly to backend services.
+- Envoy Gateway is the backend ingress and north-south policy boundary for traffic that is allowed into the Kubernetes cluster.
+- Envoy Gateway owns ingress concerns such as route exposure, ingress authentication policy, rate limiting, and traffic policy enforcement.
+- Exposed backend routes may forward to internal gRPC services, but service-owned authorization and domain invariants still remain inside the destination services.
+- There is no custom backend `gateway` service by default in this topology.
 
 ## Hot Path
 - Use synchronous gRPC when the caller cannot wait for asynchronous convergence and needs an immediate authoritative answer.
 - Not every gRPC call has the same latency target. `identity`, `friendship`, and `workspace` are primarily synchronous command and authorization services; they stay synchronous for correctness, permission checks, and immediate user feedback even when they do not require chat-like fanout latency.
-- `gateway` forwards synchronous requests to internal services over gRPC when the edge cannot wait for eventual consistency.
+- SvelteKit may issue synchronous server-side gRPC calls through Envoy Gateway to approved backend services when the application cannot wait for eventual consistency.
+- Envoy Gateway may expose selected backend gRPC surfaces outward to approved external callers as the north-south ingress boundary, but exposure policy is distinct from the authorization decisions enforced by backend services themselves.
 - Services may use direct gRPC when immediate authorization, correctness, or low latency is required and ownership boundaries remain clear.
 - `chat` may synchronously notify `realtime` only for low-latency message-create fanout.
 - `chat` remains the durable source of truth for message persistence and write acceptance.
@@ -52,8 +56,9 @@
 
 ## Local Kubernetes Topology
 - Local orchestration uses kind.
-- kind runs the platform edge and service topology needed for end-to-end development.
-- Default local dependencies include Traefik, RabbitMQ, per-service Postgres instances, allowed Redis usage, core services, and supporting workers.
+- kind runs the backend ingress and service topology needed for end-to-end backend development.
+- Default local dependencies include Envoy Gateway, RabbitMQ, per-service Postgres instances, allowed Redis usage, core services, Kubernetes Services for internal service discovery and load balancing, and supporting workers.
+- The SvelteKit application remains external to the cluster even when it participates in local end-to-end flows.
 - Sidecar outbox workers run alongside publishing services in local Kubernetes so the delivery pattern is exercised early.
 
 ## Consistency Model
