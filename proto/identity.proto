@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package relay.identity;
+
+import "google/protobuf/timestamp.proto";
+
+service IdentityService {
+  rpc RegisterUser(RegisterUserRequest) returns (AuthSessionResponse);
+  rpc AuthenticatePassword(AuthenticatePasswordRequest) returns (AuthSessionResponse);
+  rpc VerifySession(VerifySessionRequest) returns (VerifySessionResponse);
+  rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionResponse);
+  rpc RedeemEmailVerificationToken(RedeemEmailVerificationTokenRequest) returns (RedeemEmailVerificationTokenResponse);
+  rpc UpdateUserProfile(UpdateUserProfileRequest) returns (UpdateUserProfileResponse);
+  rpc GetUserProfile(GetUserProfileRequest) returns (GetUserProfileResponse);
+  rpc GetUsersByIds(GetUsersByIdsRequest) returns (GetUsersByIdsResponse);
+}
+
+message UserProfile {
+  string user_id = 1;
+  string username = 2;
+  string display_name = 3;
+  optional string avatar_url = 4;
+}
+
+message UserProfileSummary {
+  string user_id = 1;
+  string username = 2;
+  string display_name = 3;
+  optional string avatar_url = 4;
+  bool email_verified = 5;
+}
+
+message RegisterUserRequest {
+  string email = 1;
+  string password = 2;
+  string username = 3;
+  string display_name = 4;
+  optional string avatar_url = 5;
+  optional string idempotency_key = 6;
+}
+
+message AuthenticatePasswordRequest {
+  string email = 1;
+  string password = 2;
+  optional string client_instance_id = 3;
+}
+
+message AuthSessionResponse {
+  string user_id = 1;
+  string session_id = 2;
+  string session_token = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  bool email_verified = 5;
+  UserProfile profile = 6;
+}
+
+message VerifySessionRequest {
+  string session_token = 1;
+  optional string client_instance_id = 2;
+}
+
+message VerifySessionResponse {
+  bool valid = 1;
+  string user_id = 2;
+  string session_id = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  bool email_verified = 5;
+  UserProfile profile = 6;
+}
+
+message RevokeSessionRequest {
+  string session_id = 1;
+  optional string revoke_reason = 2;
+}
+
+message RevokeSessionResponse {
+  bool revoked = 1;
+  optional google.protobuf.Timestamp revoked_at = 2;
+}
+
+message RedeemEmailVerificationTokenRequest {
+  string token = 1;
+}
+
+message RedeemEmailVerificationTokenResponse {
+  string user_id = 1;
+  string email = 2;
+  bool email_verified = 3;
+  google.protobuf.Timestamp verified_at = 4;
+}
+
+message UpdateUserProfileRequest {
+  string user_id = 1;
+  string display_name = 2;
+  optional string avatar_url = 3;
+}
+
+message UpdateUserProfileResponse {
+  string user_id = 1;
+  string username = 2;
+  string display_name = 3;
+  optional string avatar_url = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+message GetUserProfileRequest {
+  string user_id = 1;
+}
+
+message GetUserProfileResponse {
+  string user_id = 1;
+  string email = 2;
+  bool email_verified = 3;
+  string username = 4;
+  string display_name = 5;
+  optional string avatar_url = 6;
+}
+
+message GetUsersByIdsRequest {
+  repeated string user_ids = 1;
+}
+
+message GetUsersByIdsResponse {
+  repeated UserProfileSummary users = 1;
+}
