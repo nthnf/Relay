@@ -4,7 +4,7 @@ Bootstrap exposes synchronous projection-backed read contracts for the external 
 
 ## Shared Contract Rules
 
-- Authenticated end-user reads derive actor/session context from ingress-authenticated request context forwarded through Envoy Gateway.
+- Authenticated end-user reads derive actor/session context from Envoy-validated access-token claims forwarded through Envoy Gateway.
 - Bootstrap serves projection-backed snapshots only; it does not perform write-side authorization or domain mutation.
 - Read responses may lag recent writes because upstream projections converge asynchronously.
 - Collection ordering is contractual: friends sort by `sort_username` ascending then `friend_user_id`, workspaces sort by `last_activity_at` descending then `workspace_id`, and sidebar channels sort by `position` ascending then `channel_id`.
@@ -16,7 +16,7 @@ Bootstrap exposes synchronous projection-backed read contracts for the external 
 
 **Request fields**
 
-- none beyond forwarded authenticated actor/session context
+- none beyond Envoy-forwarded authenticated actor/session context
 
 **Response fields**
 
@@ -36,7 +36,7 @@ Bootstrap exposes synchronous projection-backed read contracts for the external 
 
 **Request fields**
 
-- none beyond forwarded authenticated actor/session context
+- none beyond Envoy-forwarded authenticated actor/session context
 
 **Response fields**
 
@@ -53,7 +53,7 @@ Bootstrap exposes synchronous projection-backed read contracts for the external 
 
 **Request fields**
 
-- none beyond forwarded authenticated actor/session context
+- none beyond Envoy-forwarded authenticated actor/session context
 
 **Response fields**
 

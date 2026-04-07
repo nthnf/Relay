@@ -78,6 +78,6 @@ Semantic rules:
 
 - `identity` owns the stable `user_id` namespace and profile basics used by friendship payloads and downstream projections.
 - Friendship synchronously validates write-path target users through `identity` and rejects unknown users instead of persisting orphaned relationship rows.
-- External application servers call friendship through Envoy Gateway; friendship does not trust arbitrary caller-supplied actor identity and must authorize from ingress-authenticated request context at its own boundary.
+- External application servers call friendship through Envoy Gateway; friendship does not trust arbitrary caller-supplied actor identity and must authorize from Envoy-validated access-token context at its own boundary.
 - `bootstrap` consumes `FriendRequestAccepted` and `FriendshipRemoved` to materialize and remove accepted-friend projection rows.
 - Friendship inserts durable integration events into its local `outbox_event` table in the same transaction as the source write.

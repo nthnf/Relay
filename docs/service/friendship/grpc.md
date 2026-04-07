@@ -4,7 +4,7 @@ Friendship exposes synchronous relationship command and bounded read contracts. 
 
 ## Shared Contract Rules
 
-- Authenticated actor identity is derived from ingress-authenticated request context; callers must not be allowed to mutate another actor's relationship state by supplying arbitrary user IDs.
+- Authenticated actor identity is derived from Envoy-validated access-token context; callers must not be allowed to mutate another actor's relationship state by supplying arbitrary user IDs.
 - External application callers do not supply actor identity in request payloads for end-user actions; the transport boundary or a trusted backend caller context attaches it out-of-band.
 - Friendship enforces target-user existence at its own boundary by synchronously validating write-path target IDs with `identity`; upstream callers may pre-validate, but friendship must not rely on ingress-only checks.
 - If `identity` reports the target user is unknown, friendship rejects the write with a not-found-style domain error and persists no relationship row for that target.

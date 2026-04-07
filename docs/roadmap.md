@@ -11,7 +11,8 @@
 ## Phase 2: Identity And Access
 - Deliver `identity` service contracts for user identity, credential flows, token issuance, and service-to-service auth expectations.
 - Define which backend gRPC surfaces are externally reachable by SvelteKit and which remain internal-only.
-- Define ingress authentication, rate-limiting, and route policy boundaries in Envoy Gateway.
+- Define Envoy Gateway access-token validation policy for protected routes and keep auth-entry routes explicitly public where required.
+- Define `identity` refresh-token rotation semantics so refresh returns a new access token and a new refresh token while revoking the old refresh token.
 - Preserve service-owned authorization and domain invariants inside backend services instead of shifting them into ingress policy.
 - Define user account persistence in the identity-owned Postgres database.
 - Document synchronous gRPC contracts needed for authenticated internal requests and other immediate authoritative decisions.

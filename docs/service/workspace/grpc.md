@@ -4,7 +4,7 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 
 ## Shared Contract Rules
 
-- Authenticated actor identity is derived from ingress-authenticated request context; callers must not be allowed to mutate another actor's workspace state by supplying arbitrary user IDs.
+- Authenticated actor identity is derived from Envoy-validated access-token context; callers must not be allowed to mutate another actor's workspace state by supplying arbitrary user IDs.
 - External application callers do not supply actor identity in request payloads for end-user actions; the transport boundary or a trusted backend caller context attaches it out-of-band.
 - Workspace enforces workspace-local authorization at its own boundary using membership and role state it owns.
 - `owner_user_id` is the canonical ultimate authority for the workspace in v1. Role assignments delegate permissions to non-owner members, but the owner implicitly has all permissions regardless of explicit role assignment.

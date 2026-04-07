@@ -2,19 +2,19 @@
 
 ## Register with a unique email and password
 
-As a new user, I can register with an email, password, username, and display name so long as the normalized email is not already owned by another account, and the system creates my active identity record, initial session, and initial email verification token in one durable write path.
+As a new user, I can register with an email, password, username, and display name so long as the normalized email is not already owned by another account, and the system creates my active identity record, initial rotating refresh session, initial access JWT, and initial email verification token in one durable write path.
 
 ## Verify my email with a single-use token
 
 As a newly registered user, I can redeem the email verification token issued for my account so identity marks my email as verified exactly once and publishes a durable `UserEmailVerified` event for downstream consumers.
 
-## Keep a valid session until it expires or is revoked
+## Refresh expired access tokens by rotating the refresh token
 
-As an authenticated user, I keep using my session until its `expires_at` passes or identity revokes it, and the external application server can verify that session through identity via Envoy Gateway without reading shared database state; if my account is disabled, identity invalidates my active sessions and future verification fails.
+As an authenticated user, I use short-lived access JWTs that Envoy Gateway validates on protected routes, and when the access token expires the external application server can call identity with my refresh token to receive a new access token and a new refresh token while the old refresh token is revoked.
 
-## Keep client-bound sessions tied to the issuing client instance
+## Keep client-bound refresh sessions tied to the issuing client instance
 
-As a client using a session that was issued with `client_instance_id`, I must present the same `client_instance_id` during verification or the session is treated as invalid.
+As a client using a refresh session that was issued with `client_instance_id`, I must present the same `client_instance_id` during refresh or the refresh attempt is treated as invalid.
 
 ## Update profile basics through the identity owner
 

@@ -93,4 +93,4 @@ Once that Service exists, the route can become usable through Envoy Gateway. Bec
 
 ## 7. Placeholder policy files
 
-`deployment/envoy-gateway/security-policy-placeholder.yaml` and `deployment/envoy-gateway/backend-traffic-policy-placeholder.yaml` are placeholders only. They intentionally do not define the final auth, retry, timeout, or traffic-policy behavior for Relay yet.
+`deployment/envoy-gateway/security-policy-placeholder.yaml` and `deployment/envoy-gateway/backend-traffic-policy-placeholder.yaml` are placeholders only. The approved auth direction is that Envoy Gateway will validate short-lived access JWTs on protected GRPCRoutes, while `identity` will keep public auth-entry and refresh flows plus refresh-token rotation. These files intentionally stop short of final policy attachment until the protected-vs-public route split and JWKS source are finalized.

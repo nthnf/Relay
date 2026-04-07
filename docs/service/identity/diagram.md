@@ -4,7 +4,7 @@
 flowchart LR
     B[Browser Client] --> A[External SvelteKit]
     A --> G[Envoy Gateway]
-    G -->|gRPC RegisterUser / AuthenticatePassword / VerifySession / RevokeSession| I[identity]
+    G -->|gRPC RegisterUser / AuthenticatePassword / RefreshSession / RevokeSession| I[identity]
     G -->|gRPC RedeemEmailVerificationToken / UpdateUserProfile| I
 
     subgraph Identity DB Transaction
@@ -32,7 +32,7 @@ flowchart LR
 
 Notes:
 
-- Envoy Gateway owns backend ingress policy, while identity owns account and session persistence.
-- `RegisterUser` and `AuthenticatePassword` are unauthenticated entry RPCs; authenticated actor context applies to session-bound and profile-bound calls only.
+- Envoy Gateway owns backend ingress policy, validates short-lived access JWTs on protected routes, and forwards authenticated request context where required.
+- `RegisterUser`, `AuthenticatePassword`, `RefreshSession`, and `RedeemEmailVerificationToken` are auth-entry RPCs; protected actor context applies to profile-bound calls only.
 - Identity writes domain rows and `outbox_event` rows in the same local Postgres transaction, including initial email verification token issuance and profile/email-verification updates.
-- RabbitMQ publication is asynchronous and does not replace the synchronous registration or session result returned to the external caller through Envoy Gateway.
+- RabbitMQ publication is asynchronous and does not replace the synchronous token-pair or profile result returned to the external caller through Envoy Gateway.

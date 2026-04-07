@@ -1,6 +1,6 @@
 ## Persistence Scope
 
-Identity owns account, credential, verification, profile-basic, and session state. Other services must read identity data through gRPC or local projections built from identity events.
+Identity owns account, credential, verification, profile-basic, and refresh-session state. Other services must read identity data through gRPC or local projections built from identity events.
 
 ## Core Tables
 
@@ -24,7 +24,7 @@ Semantic rules:
 - `email_normalized` must be unique so registration rejects duplicate emails independent of case.
 - `email_verified_at` changes only inside identity-owned verification flows.
 - `account_status = active` is the only value created by `RegisterUser` in v1.
-- `account_status = disabled` prevents successful password authentication and causes `VerifySession` to treat all sessions for the account as invalid.
+- `account_status = disabled` prevents successful password authentication and causes `RefreshSession` to reject refresh attempts for the account's sessions.
 - Disabling an account requires revoking all active `user_session` rows for that `user_id` and inserting matching `SessionRevoked` outbox rows.
 
 ### `user_profile`
@@ -67,28 +67,30 @@ Semantic rules:
 
 ### `user_session`
 
-Service-owned login session state.
+Service-owned refresh-session state.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `session_id` | `uuid` | Primary key. Stable session identifier returned to callers. |
 | `user_id` | `uuid` | Foreign key to `user_account.user_id`. |
-| `session_secret_hash` | `text` | Hash of the bearer session secret or opaque token material. |
+| `refresh_token_hash` | `text` | Hash of the rotating refresh token material. |
 | `issued_at` | `timestamptz` | Session issuance time. |
-| `expires_at` | `timestamptz` | Hard expiry; sessions are invalid after this time. |
+| `refresh_expires_at` | `timestamptz` | Hard expiry for the refresh token session. |
 | `revoked_at` | `timestamptz null` | Null until explicitly revoked. |
 | `revoke_reason` | `text null` | Optional contract value such as `logout` or `admin_action`. |
+| `replaced_by_session_id` | `uuid null` | Set when refresh rotates this session into a newly issued session. |
 | `client_instance_id` | `uuid null` | Optional client instance binding when provided by the edge. |
 | `created_at` | `timestamptz` | Row creation time. |
 
 Semantic rules:
 
-- A session is valid only when `revoked_at is null` and `expires_at > now()`.
-- A session is also invalid when the owning `user_account.account_status` is `disabled`.
-- `session_secret_hash` prevents storing reusable bearer material in plaintext.
-- `VerifySession` must treat revoked and expired rows as invalid without consulting another service.
-- If `client_instance_id` is set on the row, `VerifySession` must receive the same value or reject the session as invalid.
-- If `client_instance_id` is null on the row, `VerifySession` does not require a request `client_instance_id` and does not enforce client-instance matching for that session.
+- A refresh session is valid only when `revoked_at is null` and `refresh_expires_at > now()`.
+- A refresh session is also invalid when the owning `user_account.account_status` is `disabled`.
+- `refresh_token_hash` prevents storing reusable refresh-token material in plaintext.
+- Successful refresh rotates the current session by setting `revoked_at`, `revoke_reason = rotated`, and `replaced_by_session_id`, then creating a new `user_session` row in the same transaction.
+- If `client_instance_id` is set on the row, `RefreshSession` must receive the same value or reject the refresh as invalid.
+- If `client_instance_id` is null on the row, `RefreshSession` does not require a request `client_instance_id` and does not enforce client-instance matching for that session.
+- Short-lived access tokens are minted by identity but validated at Envoy Gateway on protected routes rather than looked up in this table on every request.
 
 ### `email_verification_token`
 
@@ -120,7 +122,7 @@ Semantic rules:
 ## Cross-Service References
 
 - Other services store `user_id` as the stable foreign reference only; they must not duplicate credential or session tables.
-- External application servers call identity through Envoy Gateway for registration, password authentication, session verification, and session revocation.
+- External application servers call identity through Envoy Gateway for registration, password authentication, refresh-token rotation, and session revocation.
 - External application servers also call identity through Envoy Gateway to redeem email verification tokens and update profile basics for authenticated users.
 - `bootstrap` and other consumers use identity events or approved lookup RPCs for profile basics.
 - Durable identity events are inserted into the local `outbox_event` table within the same transaction as the source write.

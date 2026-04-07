@@ -4,7 +4,7 @@ Chat exposes hot-path message-write commands, bounded channel and direct-message
 
 ## Shared Contract Rules
 
-- Authenticated actor identity is derived from ingress-authenticated request context and must still be authorized by the chat service boundary; callers must not mutate another actor's message state by supplying arbitrary user IDs.
+- Authenticated actor identity is derived from Envoy-validated access-token context and must still be authorized by the chat service boundary; callers must not mutate another actor's message state by supplying arbitrary user IDs.
 - External application callers do not supply actor identity in request payloads for end-user actions; the transport boundary or a trusted backend caller context attaches it out-of-band.
 - Chat enforces chat-local invariants and must validate channel access against `workspace` before accepting workspace-channel writes or history reads.
 - Chat authorizes direct-message writes and reads through `direct_conversation_member` rows it owns.

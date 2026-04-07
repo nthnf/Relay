@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package relay.bootstrap;
+
+import "google/protobuf/timestamp.proto";
+
+message UserCard {
+  string user_id = 1;
+  string username = 2;
+  string display_name = 3;
+  optional string avatar_url = 4;
+}
+
+message HomeSummary {
+  int32 friend_count = 1;
+  int32 workspace_count = 2;
+  int32 unread_workspace_count = 3;
+  int32 total_unread_count = 4;
+}
+
+message FriendListItem {
+  string friend_user_id = 1;
+  string username = 2;
+  string display_name = 3;
+  optional string avatar_url = 4;
+  bool email_verified = 5;
+}
+
+message WorkspaceCard {
+  string workspace_id = 1;
+  string name = 2;
+  optional string icon_url = 3;
+  int32 member_count = 4;
+  int32 channel_count = 5;
+  int32 unread_count = 6;
+  string last_message_preview = 7;
+  optional google.protobuf.Timestamp last_activity_at = 8;
+}
+
+message WorkspaceSidebarChannel {
+  string channel_id = 1;
+  string name = 2;
+  string channel_kind = 3;
+  int32 position = 4;
+  int32 unread_count = 5;
+}
+
+message GetHomeRequest {}
+
+message GetHomeResponse {
+  UserCard user = 1;
+  HomeSummary summary = 2;
+  repeated FriendListItem friends_preview = 3;
+  repeated WorkspaceCard workspaces = 4;
+}
+
+message ListFriendsRequest {}
+
+message ListFriendsResponse {
+  repeated FriendListItem items = 1;
+}
+
+message ListWorkspacesRequest {}
+
+message ListWorkspacesResponse {
+  repeated WorkspaceCard items = 1;
+}
+
+message GetWorkspaceSidebarRequest {
+  string workspace_id = 1;
+}
+
+message WorkspaceSidebarHeader {
+  string workspace_id = 1;
+  string name = 2;
+  optional string icon_url = 3;
+  int32 member_count = 4;
+  int32 unread_count = 5;
+  optional google.protobuf.Timestamp last_activity_at = 6;
+}
+
+message GetWorkspaceSidebarResponse {
+  WorkspaceSidebarHeader workspace = 1;
+  repeated WorkspaceSidebarChannel channels = 2;
+}
+
+service BootstrapService {
+  rpc GetHome(GetHomeRequest) returns (GetHomeResponse);
+  rpc ListFriends(ListFriendsRequest) returns (ListFriendsResponse);
+  rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
+  rpc GetWorkspaceSidebar(GetWorkspaceSidebarRequest) returns (GetWorkspaceSidebarResponse);
+}

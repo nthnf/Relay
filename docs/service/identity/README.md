@@ -6,7 +6,9 @@ Identity owns user accounts, credentials, profile basics, email verification sta
 
 - Create user accounts for new registrations.
 - Store password credentials and validate password login attempts.
-- Mint, verify, expire, and revoke service-owned sessions.
+- Mint short-lived access JWTs plus rotating refresh tokens.
+- Rotate refresh tokens and revoke the prior refresh token on successful refresh.
+- Revoke refresh sessions explicitly on logout, disable, or other identity-owned security actions.
 - Enforce account status so disabled accounts cannot authenticate or continue using existing sessions.
 - Own profile basics needed across the platform: username, display name, avatar URL, and email verification status.
 - Issue and redeem email verification tokens.
@@ -22,7 +24,7 @@ Identity owns user accounts, credentials, profile basics, email verification sta
 
 ## Dependencies
 
-- **external application server through Envoy Gateway** for public registration, login, logout, and current-user routing.
+- **external application server through Envoy Gateway** for public registration, login, refresh, logout, and current-user/profile routing.
 - **RabbitMQ** for durable cold-path publication of identity integration events.
 - **outbox worker sidecar** for polling local `outbox_event` rows and publishing them.
 - **Postgres** as the service-owned source of truth for accounts, credentials, sessions, and verification tokens.
@@ -37,7 +39,7 @@ Identity owns user accounts, credentials, profile basics, email verification sta
 
 - `RegisterUser`
 - `AuthenticatePassword`
-- `VerifySession`
+- `RefreshSession`
 - `RevokeSession`
 - `RedeemEmailVerificationToken`
 - `UpdateUserProfile`
@@ -58,6 +60,7 @@ See `events.md` for payload and publication rules.
 ### V1 Account Status Rules
 
 - `RegisterUser` creates `user_account.account_status = active` only.
-- `AuthenticatePassword` rejects `disabled` accounts and must not mint a new session for them.
-- `VerifySession` treats sessions for `disabled` accounts as invalid even if the session row is otherwise unexpired.
+- `AuthenticatePassword` rejects `disabled` accounts and must not mint new token pairs for them.
+- `RefreshSession` rejects revoked, expired, rotated, or disabled-account refresh sessions.
+- Envoy Gateway validates short-lived access JWTs on protected routes; identity remains the authority for refresh-token validation and rotation.
 - When an account is disabled, identity must revoke that account's active sessions and persist corresponding `SessionRevoked` outbox effects as part of the disable workflow.

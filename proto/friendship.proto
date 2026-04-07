@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+package relay.friendship;
+
+import "google/protobuf/timestamp.proto";
+
+service FriendshipService {
+  rpc CreateFriendRequest(CreateFriendRequestRequest) returns (FriendRequestRecord);
+  rpc AcceptFriendRequest(AcceptFriendRequestRequest) returns (AcceptFriendRequestResponse);
+  rpc RejectFriendRequest(RejectFriendRequestRequest) returns (RejectFriendRequestResponse);
+  rpc RemoveFriend(RemoveFriendRequest) returns (RemoveFriendResponse);
+  rpc BlockUser(BlockUserRequest) returns (BlockUserResponse);
+  rpc UnblockUser(UnblockUserRequest) returns (UnblockUserResponse);
+  rpc ListFriends(ListFriendsRequest) returns (ListFriendsResponse);
+  rpc ListPendingRequests(ListPendingRequestsRequest) returns (ListPendingRequestsResponse);
+}
+
+message FriendRequestRecord {
+  string friend_request_id = 1;
+  string requester_user_id = 2;
+  string addressee_user_id = 3;
+  string status = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message CreateFriendRequestRequest {
+  string target_user_id = 1;
+}
+
+message AcceptFriendRequestRequest {
+  string friend_request_id = 1;
+}
+
+message AcceptFriendRequestResponse {
+  string friend_request_id = 1;
+  string requester_user_id = 2;
+  string addressee_user_id = 3;
+  google.protobuf.Timestamp accepted_at = 4;
+}
+
+message RejectFriendRequestRequest {
+  string friend_request_id = 1;
+}
+
+message RejectFriendRequestResponse {
+  string friend_request_id = 1;
+  string status = 2;
+  google.protobuf.Timestamp resolved_at = 3;
+}
+
+message RemoveFriendRequest {
+  string friend_user_id = 1;
+}
+
+message RemoveFriendResponse {
+  bool removed = 1;
+  optional google.protobuf.Timestamp removed_at = 2;
+}
+
+message BlockUserRequest {
+  string target_user_id = 1;
+}
+
+message BlockUserResponse {
+  bool blocked = 1;
+  google.protobuf.Timestamp blocked_at = 2;
+  bool already_blocked = 3;
+}
+
+message UnblockUserRequest {
+  string target_user_id = 1;
+}
+
+message UnblockUserResponse {
+  bool unblocked = 1;
+  optional google.protobuf.Timestamp unblocked_at = 2;
+}
+
+message ListFriendsRequest {
+  optional int32 page_size = 1;
+  optional string page_token = 2;
+}
+
+message FriendshipEdge {
+  string friend_user_id = 1;
+  google.protobuf.Timestamp accepted_at = 2;
+}
+
+message ListFriendsResponse {
+  repeated FriendshipEdge friends = 1;
+  optional string next_page_token = 2;
+}
+
+message ListPendingRequestsRequest {
+  optional string direction = 1;
+  optional int32 page_size = 2;
+  optional string page_token = 3;
+}
+
+message ListPendingRequestsResponse {
+  repeated FriendRequestRecord requests = 1;
+  optional string next_page_token = 2;
+}

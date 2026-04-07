@@ -1,0 +1,145 @@
+syntax = "proto3";
+
+package relay.workspace;
+
+import "google/protobuf/timestamp.proto";
+
+service WorkspaceService {
+  rpc CreateWorkspace(CreateWorkspaceRequest) returns (CreateWorkspaceResponse);
+  rpc GetWorkspace(GetWorkspaceRequest) returns (GetWorkspaceResponse);
+  rpc ListWorkspacesForUser(ListWorkspacesForUserRequest) returns (ListWorkspacesForUserResponse);
+  rpc CreateChannel(CreateChannelRequest) returns (CreateChannelResponse);
+  rpc ListChannels(ListChannelsRequest) returns (ListChannelsResponse);
+  rpc AddMember(AddMemberRequest) returns (AddMemberResponse);
+  rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
+  rpc IssueInvitation(IssueInvitationRequest) returns (IssueInvitationResponse);
+  rpc AcceptInvitation(AcceptInvitationRequest) returns (AcceptInvitationResponse);
+}
+
+message CreateWorkspaceRequest {
+  string name = 1;
+}
+
+message CreateWorkspaceResponse {
+  string workspace_id = 1;
+  string name = 2;
+  string owner_user_id = 3;
+  google.protobuf.Timestamp created_at = 4;
+  string initial_member_user_id = 5;
+}
+
+message GetWorkspaceRequest {
+  string workspace_id = 1;
+}
+
+message GetWorkspaceResponse {
+  string workspace_id = 1;
+  string name = 2;
+  string owner_user_id = 3;
+  int32 member_count = 4;
+  int32 channel_count = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message ListWorkspacesForUserRequest {
+  optional int32 page_size = 1;
+  optional string page_token = 2;
+}
+
+message WorkspaceSummary {
+  string workspace_id = 1;
+  string name = 2;
+  int32 member_count = 3;
+  int32 channel_count = 4;
+  google.protobuf.Timestamp joined_at = 5;
+}
+
+message ListWorkspacesForUserResponse {
+  repeated WorkspaceSummary workspaces = 1;
+  optional string next_page_token = 2;
+}
+
+message CreateChannelRequest {
+  string workspace_id = 1;
+  string name = 2;
+  string channel_kind = 3;
+  optional int32 position = 4;
+}
+
+message CreateChannelResponse {
+  string channel_id = 1;
+  string workspace_id = 2;
+  string name = 3;
+  string channel_kind = 4;
+  int32 position = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message ListChannelsRequest {
+  string workspace_id = 1;
+}
+
+message ChannelSummary {
+  string channel_id = 1;
+  string name = 2;
+  string channel_kind = 3;
+  int32 position = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message ListChannelsResponse {
+  repeated ChannelSummary channels = 1;
+}
+
+message AddMemberRequest {
+  string workspace_id = 1;
+  string target_user_id = 2;
+}
+
+message AddMemberResponse {
+  string workspace_id = 1;
+  string user_id = 2;
+  google.protobuf.Timestamp joined_at = 3;
+  string added_by_user_id = 4;
+}
+
+message RemoveMemberRequest {
+  string workspace_id = 1;
+  string target_user_id = 2;
+}
+
+message RemoveMemberResponse {
+  bool removed = 1;
+  string workspace_id = 2;
+  string user_id = 3;
+  optional google.protobuf.Timestamp removed_at = 4;
+}
+
+message IssueInvitationRequest {
+  string workspace_id = 1;
+  string target_user_id = 2;
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+message IssueInvitationResponse {
+  string workspace_invitation_id = 1;
+  string workspace_id = 2;
+  string issued_to_user_id = 3;
+  string issued_by_user_id = 4;
+  string status = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message AcceptInvitationRequest {
+  string workspace_invitation_id = 1;
+}
+
+message AcceptInvitationResponse {
+  string workspace_id = 1;
+  string workspace_invitation_id = 2;
+  string user_id = 3;
+  google.protobuf.Timestamp joined_at = 4;
+  google.protobuf.Timestamp accepted_at = 5;
+  string added_by_user_id = 6;
+}

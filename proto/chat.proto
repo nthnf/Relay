@@ -1,0 +1,129 @@
+syntax = "proto3";
+
+package relay.chat;
+
+import "google/protobuf/timestamp.proto";
+
+service ChatService {
+  rpc CreateMessage(CreateMessageRequest) returns (CreateMessageResponse);
+  rpc EditMessage(EditMessageRequest) returns (EditMessageResponse);
+  rpc DeleteMessage(DeleteMessageRequest) returns (DeleteMessageResponse);
+  rpc ListChannelMessages(ListChannelMessagesRequest) returns (ListMessagesResponse);
+  rpc GetOrCreateDirectConversation(GetOrCreateDirectConversationRequest) returns (GetOrCreateDirectConversationResponse);
+  rpc ListDirectConversationMessages(ListDirectConversationMessagesRequest) returns (ListMessagesResponse);
+  rpc AddReaction(AddReactionRequest) returns (ReactionMutationResponse);
+  rpc RemoveReaction(RemoveReactionRequest) returns (RemoveReactionResponse);
+}
+
+message CreateMessageRequest {
+  optional string workspace_id = 1;
+  optional string channel_id = 2;
+  optional string direct_conversation_id = 3;
+  string body = 4;
+  optional string client_message_id = 5;
+}
+
+message CreateMessageResponse {
+  string message_id = 1;
+  optional string workspace_id = 2;
+  optional string channel_id = 3;
+  optional string direct_conversation_id = 4;
+  string author_user_id = 5;
+  int64 target_message_seq = 6;
+  string body = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message EditMessageRequest {
+  string message_id = 1;
+  string new_body = 2;
+}
+
+message EditMessageResponse {
+  string message_id = 1;
+  optional string channel_id = 2;
+  optional string workspace_id = 3;
+  optional string direct_conversation_id = 4;
+  string body = 5;
+  int32 edit_version = 6;
+  google.protobuf.Timestamp edited_at = 7;
+}
+
+message DeleteMessageRequest {
+  string message_id = 1;
+}
+
+message DeleteMessageResponse {
+  string message_id = 1;
+  optional string channel_id = 2;
+  optional string workspace_id = 3;
+  optional string direct_conversation_id = 4;
+  google.protobuf.Timestamp deleted_at = 5;
+  bool deleted = 6;
+  bool already_deleted = 7;
+}
+
+message ListChannelMessagesRequest {
+  string workspace_id = 1;
+  string channel_id = 2;
+  optional int32 page_size = 3;
+  optional int64 before_target_message_seq = 4;
+}
+
+message ListDirectConversationMessagesRequest {
+  string direct_conversation_id = 1;
+  optional int32 page_size = 2;
+  optional int64 before_target_message_seq = 3;
+}
+
+message MessageSummary {
+  string message_id = 1;
+  string author_user_id = 2;
+  int64 target_message_seq = 3;
+  string body = 4;
+  string message_status = 5;
+  google.protobuf.Timestamp created_at = 6;
+  optional google.protobuf.Timestamp last_edited_at = 7;
+  optional google.protobuf.Timestamp deleted_at = 8;
+}
+
+message ListMessagesResponse {
+  repeated MessageSummary messages = 1;
+  optional int64 next_before_target_message_seq = 2;
+}
+
+message GetOrCreateDirectConversationRequest {
+  string peer_user_id = 1;
+}
+
+message GetOrCreateDirectConversationResponse {
+  string direct_conversation_id = 1;
+  repeated string member_user_ids = 2;
+  google.protobuf.Timestamp created_at = 3;
+  bool created = 4;
+}
+
+message AddReactionRequest {
+  string message_id = 1;
+  string reaction_key = 2;
+}
+
+message ReactionMutationResponse {
+  string message_id = 1;
+  string reaction_key = 2;
+  string user_id = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+message RemoveReactionRequest {
+  string message_id = 1;
+  string reaction_key = 2;
+}
+
+message RemoveReactionResponse {
+  string message_id = 1;
+  string reaction_key = 2;
+  string user_id = 3;
+  bool removed = 4;
+  optional google.protobuf.Timestamp removed_at = 5;
+}

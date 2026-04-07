@@ -11,10 +11,12 @@
 ## Core Architecture Contracts
 
 - Synchronous service-to-service request/response flows use gRPC when the caller needs an immediate authoritative answer.
-- Only selected flows, especially edge auth/session validation and `chat` to `realtime` message-create fanout, are truly latency-sensitive hot path.
+- Only selected flows, especially Envoy-side access-JWT validation on protected routes and `chat` to `realtime` message-create fanout, are truly latency-sensitive hot path.
 - Cold path uses RabbitMQ for durable asynchronous propagation with eventual consistency.
 - Browser traffic reaches an external SvelteKit application; backend traffic enters the Kubernetes cluster through Envoy Gateway.
 - There is no custom backend `gateway` service by default in this topology.
+- Envoy Gateway validates short-lived access JWTs for protected externally reachable backend routes before forwarding requests.
+- `identity` owns refresh token rotation and issues new access and refresh token pairs when a refresh succeeds.
 - Local orchestration uses Kubernetes via kind.
 - Each service owns its own Postgres database; do not share service databases.
 - Redis is allowed only for rate limiting, narrowly justified caching, or the approved `realtime` presence use.

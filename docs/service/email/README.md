@@ -18,6 +18,7 @@ Email owns outbound email intent handling, provider handoff, delivery attempts, 
 - Publishing durable delivery-result integration events in v1; email is consume-only for durable events.
 - Sending password-reset, marketing, digest, or generic notification mail in v1.
 - Acting as the public client edge or replacing service-owned email state in upstream domains.
+- Being directly reachable by external application callers in v1; email remains internal-only on the durable event bus.
 
 ## Dependencies
 

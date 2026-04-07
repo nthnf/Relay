@@ -13,15 +13,25 @@
 ## Edge Path
 - Browser clients talk to the external SvelteKit application, not directly to backend services.
 - Envoy Gateway is the backend ingress and north-south policy boundary for traffic that is allowed into the Kubernetes cluster.
-- Envoy Gateway owns ingress concerns such as route exposure, ingress authentication policy, rate limiting, and traffic policy enforcement.
+- Envoy Gateway owns ingress concerns such as route exposure, access-JWT validation for protected routes, rate limiting, and traffic policy enforcement.
 - Exposed backend routes may forward to internal gRPC services, but service-owned authorization and domain invariants still remain inside the destination services.
 - There is no custom backend `gateway` service by default in this topology.
+
+## External Backend Surfaces
+- Approved externally reachable backend gRPC surfaces in v1 are `identity`, `bootstrap`, `friendship`, `workspace`, `chat`, and `realtime`.
+- `email` remains internal-only in v1 and is not a direct external application caller target.
+- `identity` exposes both public auth-entry RPCs and protected authenticated RPCs.
+- Public auth-entry RPCs such as registration, password authentication, refresh, and email-verification redemption are intentionally reachable without prior access-JWT validation.
+- Protected backend routes rely on Envoy Gateway to validate short-lived access JWTs before forwarding request context to backend services.
 
 ## Hot Path
 - Use synchronous gRPC when the caller cannot wait for asynchronous convergence and needs an immediate authoritative answer.
 - Not every gRPC call has the same latency target. `identity`, `friendship`, and `workspace` are primarily synchronous command and authorization services; they stay synchronous for correctness, permission checks, and immediate user feedback even when they do not require chat-like fanout latency.
 - SvelteKit may issue synchronous server-side gRPC calls through Envoy Gateway to approved backend services when the application cannot wait for eventual consistency.
 - Envoy Gateway may expose selected backend gRPC surfaces outward to approved external callers as the north-south ingress boundary, but exposure policy is distinct from the authorization decisions enforced by backend services themselves.
+- Protected backend gRPC routes use short-lived access JWTs validated at Envoy Gateway rather than per-request access-token introspection inside each backend service.
+- `identity` remains the authority for refresh-token validation, rotation, and session lifecycle.
+- Access-token invalidation is bounded by the short access-token TTL; refresh-token revocation and rotation remain immediate at the `identity` boundary.
 - Services may use direct gRPC when immediate authorization, correctness, or low latency is required and ownership boundaries remain clear.
 - `chat` may synchronously notify `realtime` only for low-latency message-create fanout.
 - `chat` remains the durable source of truth for message persistence and write acceptance.

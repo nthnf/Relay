@@ -5,9 +5,9 @@ package relay.identity;
 import "google/protobuf/timestamp.proto";
 
 service IdentityService {
-  rpc RegisterUser(RegisterUserRequest) returns (AuthSessionResponse);
-  rpc AuthenticatePassword(AuthenticatePasswordRequest) returns (AuthSessionResponse);
-  rpc VerifySession(VerifySessionRequest) returns (VerifySessionResponse);
+  rpc RegisterUser(RegisterUserRequest) returns (TokenPairResponse);
+  rpc AuthenticatePassword(AuthenticatePasswordRequest) returns (TokenPairResponse);
+  rpc RefreshSession(RefreshSessionRequest) returns (TokenPairResponse);
   rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionResponse);
   rpc RedeemEmailVerificationToken(RedeemEmailVerificationTokenRequest) returns (RedeemEmailVerificationTokenResponse);
   rpc UpdateUserProfile(UpdateUserProfileRequest) returns (UpdateUserProfileResponse);
@@ -45,27 +45,20 @@ message AuthenticatePasswordRequest {
   optional string client_instance_id = 3;
 }
 
-message AuthSessionResponse {
-  string user_id = 1;
-  string session_id = 2;
-  string session_token = 3;
-  google.protobuf.Timestamp expires_at = 4;
-  bool email_verified = 5;
-  UserProfile profile = 6;
-}
-
-message VerifySessionRequest {
-  string session_token = 1;
+message RefreshSessionRequest {
+  string refresh_token = 1;
   optional string client_instance_id = 2;
 }
 
-message VerifySessionResponse {
-  bool valid = 1;
-  string user_id = 2;
-  string session_id = 3;
-  google.protobuf.Timestamp expires_at = 4;
-  bool email_verified = 5;
-  UserProfile profile = 6;
+message TokenPairResponse {
+  string user_id = 1;
+  string session_id = 2;
+  string access_token = 3;
+  google.protobuf.Timestamp access_token_expires_at = 4;
+  string refresh_token = 5;
+  google.protobuf.Timestamp refresh_token_expires_at = 6;
+  bool email_verified = 7;
+  UserProfile profile = 8;
 }
 
 message RevokeSessionRequest {
@@ -90,9 +83,8 @@ message RedeemEmailVerificationTokenResponse {
 }
 
 message UpdateUserProfileRequest {
-  string user_id = 1;
-  string display_name = 2;
-  optional string avatar_url = 3;
+  string display_name = 1;
+  optional string avatar_url = 2;
 }
 
 message UpdateUserProfileResponse {
@@ -104,7 +96,7 @@ message UpdateUserProfileResponse {
 }
 
 message GetUserProfileRequest {
-  string user_id = 1;
+  optional string user_id = 1;
 }
 
 message GetUserProfileResponse {
