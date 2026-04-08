@@ -22,7 +22,7 @@ One row per durable email intent accepted by the email service.
 | `subject` | `text` | Resolved message subject stored for audit and resend consistency. |
 | `body_text` | `text` | Resolved text body sent to the provider. |
 | `body_html` | `text null` | Optional resolved HTML body sent to the provider. |
-| `source_event_type` | `text` | Consumed event contract, such as `UserRegistered` or `WorkspaceInvitationIssued`. |
+| `source_event_type` | `text` | Consumed event contract, such as `VerificationEmailRequested` or `WorkspaceInvitationIssued`. |
 | `source_event_id` | `text` | Producer event identifier or broker message identifier used for traceability. |
 | `source_occurred_at` | `timestamptz` | Upstream event occurrence time carried into local state. |
 | `send_status` | `text` | Contract values: `pending`, `submitted`, `retryable_failure`, `failed`. |
@@ -39,7 +39,7 @@ Semantic rules:
 - `email_kind` is intentionally narrow in v1 and excludes password-reset or marketing scopes.
 - `recipient_user_id` is an identity-owned reference only and is nullable so the actual send target remains `recipient_email`.
 - `template_key` and `template_version` are concrete, service-owned rendering inputs rather than a general template-management system.
-- For `registration_verification`, the rendered public URL is composed by email from configured public-web base URL plus the opaque `verification_token` carried by `UserRegistered`; email does not perform an identity lookup to obtain link material.
+- For `registration_verification`, the rendered public URL is composed by email from configured public-web base URL plus the opaque `verification_token` carried by `VerificationEmailRequested`; email does not perform an identity lookup to obtain link material.
 - `send_status = submitted` means the provider accepted the handoff; it does not prove inbox delivery.
 - `send_status = retryable_failure` means at least one attempt failed but the email may be retried later.
 - `next_attempt_after` is set only for retryable work and is the due-at value consumed by a local scheduler or poller over `outbound_email`.
@@ -77,7 +77,7 @@ Semantic rules:
 
 ## Cross-Service References
 
-- `identity` remains the source of truth for `user_id`, registration state, verification tokens, and the verification target email carried by `UserRegistered`, but v1 email rendering depends on the event carrying concrete verification-link material rather than an email-time lookup.
+- `identity` remains the source of truth for `user_id`, registration state, verification tokens, and the verification target email carried by `VerificationEmailRequested`, but v1 email rendering depends on the event carrying concrete verification-link material rather than an email-time lookup.
 - `workspace` remains the source of truth for `workspace_id`, `workspace_invitation_id`, inviter/invitee identity references, invitation expiry, and invitation acceptance lifecycle.
 - Email stores cross-service identifiers carried in consumed-event payloads for traceability only; it does not create foreign keys into other service databases.
 - Email must derive its `dedupe_key` from producer-owned identifiers so replay is idempotent across RabbitMQ redelivery; retries are driven locally from `next_attempt_after`, not from duplicate broker delivery.

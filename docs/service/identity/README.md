@@ -5,7 +5,8 @@ Identity owns user accounts, credentials, profile basics, email verification sta
 ## Owned Responsibilities
 
 - Create user accounts for new registrations.
-- Store password credentials and validate password login attempts.
+- Store password credentials and hash them server-side with Argon2id before persistence.
+- Request verification email delivery separately from durable account creation.
 - Mint short-lived access JWTs plus rotating refresh tokens.
 - Rotate refresh tokens and revoke the prior refresh token on successful refresh.
 - Revoke refresh sessions explicitly on logout, disable, or other identity-owned security actions.
@@ -42,6 +43,7 @@ Identity owns user accounts, credentials, profile basics, email verification sta
 - `RefreshSession`
 - `RevokeSession`
 - `RedeemEmailVerificationToken`
+- `ResendVerificationEmail`
 - `UpdateUserProfile`
 - `GetUserProfile`
 - `GetUsersByIds`
@@ -51,6 +53,7 @@ See `grpc.md` for request and response contracts.
 ## Event Surface
 
 - `UserRegistered`
+- `VerificationEmailRequested`
 - `UserProfileUpdated`
 - `UserEmailVerified`
 - `SessionRevoked`

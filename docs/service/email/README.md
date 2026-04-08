@@ -4,7 +4,7 @@ Email owns outbound email intent handling, provider handoff, delivery attempts, 
 
 ## Owned Responsibilities
 
-- Consume durable registration and invitation events from RabbitMQ.
+- Consume durable verification-email and invitation events from RabbitMQ.
 - Materialize one service-owned `outbound_email` row per accepted email send intent.
 - Render concrete verification and workspace-invitation messages from service-owned template/version metadata and self-contained consumed-event payloads.
 - Hand outbound messages to a configured email provider through a bounded provider abstraction.
@@ -39,7 +39,7 @@ Email owns outbound email intent handling, provider handoff, delivery attempts, 
 
 ### Consumed
 
-- `UserRegistered`
+- `VerificationEmailRequested`
 - `WorkspaceInvitationIssued`
 
 ### Published

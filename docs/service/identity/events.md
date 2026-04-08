@@ -8,7 +8,7 @@ Identity publishes integration events by inserting service-owned rows into `outb
 
 **When published**
 
-- After a new account, profile, password credential, and initial session are committed successfully.
+- After a new account, profile, password credential, and initial verification token are committed successfully.
 
 **Minimum payload**
 
@@ -19,15 +19,31 @@ Identity publishes integration events by inserting service-owned rows into `outb
 - `display_name`
 - `avatar_url`
 - `registered_at`
-- `initial_session_id`
-- `verification_token` as the opaque verification-link material needed by email delivery
-- `verification_expires_at`
-- `initial_email_verification_token_id`
 
 **Typical consumers**
 
 - `bootstrap` projections
 - Other services that need durable user creation awareness
+
+### `VerificationEmailRequested`
+
+**When published**
+
+- After identity requests a verification email for registration, unverified-password-auth, or resend flows.
+
+**Minimum payload**
+
+- `user_id`
+- `email`
+- `verification_token`
+- `verification_token_id`
+- `verification_token_expires_at`
+- `reason`
+- `requested_at`
+
+**Typical consumers**
+
+- `email`
 
 ### `UserProfileUpdated`
 
@@ -90,7 +106,8 @@ Identity publishes integration events by inserting service-owned rows into `outb
 
 - Event payloads use identity-owned keys and fields only.
 - `user_id` is the stable cross-service user reference.
-- `UserRegistered` must carry the initial opaque verification-link material so `email` can render and send the registration verification message without an identity-time lookup.
+- `UserRegistered` is durable account-creation data only and must not carry verification-link material.
+- `VerificationEmailRequested` carries the opaque verification-link material so `email` can render and send verification mail without an identity-time lookup.
 - Publication ordering should be preserved per aggregate where rows share the same account or session stream.
 - Consumers must be idempotent because replay and duplicate delivery are expected platform behaviors.
-- `RegisterUser`, `RedeemEmailVerificationToken`, `UpdateUserProfile`, and disable-driven session revocation all write their source rows and `outbox_event` rows in the same local transaction.
+- `RegisterUser`, `RedeemEmailVerificationToken`, `ResendVerificationEmail`, `UpdateUserProfile`, and disable-driven session revocation all write their source rows and `outbox_event` rows in the same local transaction.

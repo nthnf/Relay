@@ -4,20 +4,22 @@ Email consumes durable integration events from RabbitMQ and records local send s
 
 ## Consumed Events
 
-### `UserRegistered`
+### `VerificationEmailRequested`
 
 **When consumed**
 
-- After identity durably creates a new account and emits the registration event.
-- Email uses this event to enqueue the initial verification email only.
+- After identity requests verification mail for registration, auth-after-unverified, or resend flows.
+- Email uses this event to enqueue verification email sends.
 
 **Minimum payload needed by email**
 
 - `user_id`
 - `email`
 - `verification_token`
-- `verification_expires_at`
-- `registered_at`
+- `verification_token_id`
+- `verification_token_expires_at`
+- `reason`
+- `requested_at`
 
 **Local effect**
 
@@ -56,7 +58,8 @@ Email consumes durable integration events from RabbitMQ and records local send s
 - Email is consume-only in v1 for durable events; no `EmailDelivered`, `EmailBounced`, or similar integration events are published yet.
 - The v1 event scope is limited to registration verification and workspace invitation flows.
 - Password-reset triggers are explicitly out of scope for v1.
-- `UserRegistered` must carry `verification_token` and `verification_expires_at` so email can build the verification link without hidden lookup behavior.
+- `VerificationEmailRequested` must carry `verification_token`, `verification_token_id`, and `verification_token_expires_at` so email can build the verification link without hidden lookup behavior.
+- `reason` values are `registration`, `authenticate_unverified`, and `resend_request`.
 - `WorkspaceInvitationIssued` must be self-contained enough for delivery and rendering in email; email should not depend on identity or workspace read-side lookups to build the invitation message in v1.
 - Consumers must be idempotent because RabbitMQ replay and duplicate delivery are expected platform behaviors.
 - Duplicate delivery of the same consumed event is a no-op for outbound intent creation and immediate send behavior when a matching `outbound_email` row already exists.

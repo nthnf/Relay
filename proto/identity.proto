@@ -5,11 +5,12 @@ package relay.identity;
 import "google/protobuf/timestamp.proto";
 
 service IdentityService {
-  rpc RegisterUser(RegisterUserRequest) returns (TokenPairResponse);
+  rpc RegisterUser(RegisterUserRequest) returns (RegisterUserResponse);
   rpc AuthenticatePassword(AuthenticatePasswordRequest) returns (TokenPairResponse);
   rpc RefreshSession(RefreshSessionRequest) returns (TokenPairResponse);
   rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionResponse);
-  rpc RedeemEmailVerificationToken(RedeemEmailVerificationTokenRequest) returns (RedeemEmailVerificationTokenResponse);
+  rpc RedeemEmailVerificationToken(RedeemEmailVerificationTokenRequest) returns (TokenPairResponse);
+  rpc ResendVerificationEmail(ResendVerificationEmailRequest) returns (ResendVerificationEmailResponse);
   rpc UpdateUserProfile(UpdateUserProfileRequest) returns (UpdateUserProfileResponse);
   rpc GetUserProfile(GetUserProfileRequest) returns (GetUserProfileResponse);
   rpc GetUsersByIds(GetUsersByIdsRequest) returns (GetUsersByIdsResponse);
@@ -36,7 +37,12 @@ message RegisterUserRequest {
   string username = 3;
   string display_name = 4;
   optional string avatar_url = 5;
-  optional string idempotency_key = 6;
+}
+
+message RegisterUserResponse {
+  string user_id = 1;
+  string email = 2;
+  google.protobuf.Timestamp verification_email_requested_at = 3;
 }
 
 message AuthenticatePasswordRequest {
@@ -75,11 +81,12 @@ message RedeemEmailVerificationTokenRequest {
   string token = 1;
 }
 
-message RedeemEmailVerificationTokenResponse {
-  string user_id = 1;
-  string email = 2;
-  bool email_verified = 3;
-  google.protobuf.Timestamp verified_at = 4;
+message ResendVerificationEmailRequest {
+  string email = 1;
+}
+
+message ResendVerificationEmailResponse {
+  bool accepted = 1;
 }
 
 message UpdateUserProfileRequest {

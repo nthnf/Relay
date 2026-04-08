@@ -24,27 +24,23 @@ Identity exposes synchronous account, refresh-session, and profile-basic contrac
 **Request fields**
 
 - `email` (`string`)
-- `password` (`string`)
+- `password` (`string`) - plaintext password input; identity hashes it server-side with Argon2id before persistence.
 - `username` (`string`)
 - `display_name` (`string`)
 - `avatar_url` (`string optional`)
-- `idempotency_key` (`string optional`) - forwarded for tracing only; the external caller remains the idempotency owner.
 
 **Response fields**
 
-- `user_id` (`uuid optional`) - omit to target the authenticated actor; include only for owner-approved lookup paths.
-- `session_id` (`uuid`)
-- `access_token` (`string`) - short-lived JWT bearer token intended for Envoy Gateway validation on protected routes.
-- `access_token_expires_at` (`timestamp`)
-- `refresh_token` (`string`) - rotating refresh token bearer material stored only as a hash inside identity.
-- `refresh_token_expires_at` (`timestamp`)
-- `email_verified` (`bool`)
-- `profile` (`message`) with `user_id`, `username`, `display_name`, `avatar_url`
+- `user_id` (`uuid`)
+- `email` (`string`)
+- `verification_email_requested_at` (`timestamp`)
 
 **Contract notes**
 
 - Reject duplicate `email_normalized` with an already-exists domain error.
-- Create `user_account`, `user_profile`, `user_credential_password`, initial rotating `user_session`, initial `email_verification_token`, and `outbox_event` rows in one local transaction.
+- Hash the submitted plaintext password server-side with Argon2id before writing `user_credential_password.password_hash`.
+- Create `user_account`, `user_profile`, `user_credential_password`, initial `email_verification_token`, and the `UserRegistered` plus `VerificationEmailRequested` outbox rows in one local transaction.
+- Do not create a `user_session` during registration.
 - The created account must start as `active` in v1.
 
 ### `AuthenticatePassword`
@@ -54,7 +50,7 @@ Identity exposes synchronous account, refresh-session, and profile-basic contrac
 **Request fields**
 
 - `email` (`string`)
-- `password` (`string`)
+- `password` (`string`) - plaintext password input submitted for server-side verification against the stored Argon2id hash.
 - `client_instance_id` (`uuid optional`)
 
 **Response fields**
@@ -70,10 +66,29 @@ Identity exposes synchronous account, refresh-session, and profile-basic contrac
 
 **Contract notes**
 
-- Authenticate against `user_account.email_normalized` plus `user_credential_password.password_hash`.
+- Authenticate against `user_account.email_normalized` plus `user_credential_password.password_hash` using server-side Argon2id verification.
 - On success, create a new rotating `user_session` owned by identity.
 - Reject accounts where `account_status = disabled`.
 - If `client_instance_id` is provided at session creation time, the issued refresh session is bound to that value for later refresh.
+- If the account is not yet verified, `AuthenticatePassword` does not mint a session.
+
+### `ResendVerificationEmail`
+
+**Main caller:** external application server through Envoy Gateway
+
+**Request fields**
+
+- `email` (`string`)
+
+**Response fields**
+
+- `accepted` (`bool`)
+
+**Contract notes**
+
+- Always return a success-shaped response to avoid account enumeration.
+- Only existing unverified accounts may trigger a new verification email request.
+- Resend throttling remains internal and is not reflected in the response.
 
 ### `RefreshSession`
 
@@ -132,14 +147,18 @@ Identity exposes synchronous account, refresh-session, and profile-basic contrac
 **Response fields**
 
 - `user_id` (`uuid`)
-- `email` (`string`)
+- `session_id` (`uuid`)
+- `access_token` (`string`)
+- `access_token_expires_at` (`timestamp`)
+- `refresh_token` (`string`)
+- `refresh_token_expires_at` (`timestamp`)
 - `email_verified` (`bool`)
-- `verified_at` (`timestamp`)
+- `profile` (`message`) with `user_id`, `username`, `display_name`, `avatar_url`
 
 **Contract notes**
 
 - Identity hashes the presented token, resolves `email_verification_token`, and rejects unknown, expired, or already-consumed tokens.
-- Successful redemption marks the token consumed, sets `user_account.email_verified_at`, and inserts a `UserEmailVerified` outbox row in one local transaction.
+- Successful redemption marks the token consumed, sets `user_account.email_verified_at`, creates the first session, and returns a `TokenPairResponse` in one local transaction.
 
 ### `UpdateUserProfile`
 

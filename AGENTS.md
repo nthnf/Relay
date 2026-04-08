@@ -2,11 +2,11 @@
 
 ## Project Memory
 
-- Rust-heavy, Discord-like microservices platform.
 - This repository is documentation-first until implementation is explicitly requested.
 - Do not write application code unless clearly requested.
 - Documentation, tests, and infrastructure YAML are allowed.
 - Help and guide the project throughout its lifetime; keep this file current as the shared memory anchor.
+- Before implementing or searching for a implementation details refer to Cargo.toml for dependencies versioning.
 
 ## Core Architecture Contracts
 

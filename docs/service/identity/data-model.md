@@ -24,6 +24,7 @@ Semantic rules:
 - `email_normalized` must be unique so registration rejects duplicate emails independent of case.
 - `email_verified_at` changes only inside identity-owned verification flows.
 - `account_status = active` is the only value created by `RegisterUser` in v1.
+- `RegisterUser` does not create a `user_session`; the first session is minted only after verification redemption.
 - `account_status = disabled` prevents successful password authentication and causes `RefreshSession` to reject refresh attempts for the account's sessions.
 - Disabling an account requires revoking all active `user_session` rows for that `user_id` and inserting matching `SessionRevoked` outbox rows.
 
@@ -53,7 +54,7 @@ Password credential state for accounts using password auth.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `user_id` | `uuid` | Primary key and foreign key to `user_account.user_id`. |
-| `password_hash` | `text` | PHC-formatted Argon2id hash string; plaintext is never stored. |
+| `password_hash` | `text` | PHC-formatted Argon2id hash string derived and stored by identity; plaintext is never stored. |
 | `password_updated_at` | `timestamptz` | Time the active password hash was last rotated. |
 | `failed_attempt_count` | `integer` | Optional local counter for operational controls. |
 | `created_at` | `timestamptz` | Row creation time. |
@@ -62,8 +63,9 @@ Password credential state for accounts using password auth.
 Semantic rules:
 
 - Exactly zero or one active password credential row exists per `user_id` in v1.
-- `password_hash` stores only the derived hash string including algorithm parameters and salt.
-- Password verification happens only inside identity; the ingress layer never inspects hashes.
+- `password_hash` stores only the server-derived Argon2id hash string including algorithm parameters and salt.
+- Identity derives this field from the submitted plaintext password inside `RegisterUser` and never stores plaintext at rest.
+- Password verification happens only inside identity against the stored Argon2id hash; the ingress layer never inspects hashes.
 
 ### `user_session`
 
@@ -109,6 +111,7 @@ Semantic rules:
 
 - Tokens are single-use and invalid after `consumed_at` is set or `expires_at` passes.
 - Token material is stored only as a hash.
+- Resend-driven replacement should invalidate outstanding active verification tokens before issuing a fresh one.
 - Successful redemption updates `user_account.email_verified_at` in the same transaction that records token consumption.
 - `RegisterUser` creates the initial `email_verification_token` row in the same transaction as account creation.
 

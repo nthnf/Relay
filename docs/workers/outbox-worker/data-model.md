@@ -10,23 +10,22 @@ All publishing services use the shared table name `outbox_event` with the same c
 - Services should add an index that supports lease recovery queries over `status` plus `claimed_at`.
 - If services partition or otherwise optimize the table, they must preserve these lookup paths and the shared column semantics.
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `event_id` | `uuid` | Stable unique event identifier. Also used by consumers for deduplication. |
-| `aggregate_type` | `text` | Publisher-defined aggregate kind, such as `message` or `membership`. |
-| `aggregate_id` | `uuid` | Aggregate instance identifier associated with the event. |
-| `event_type` | `text` | Versioned integration event type name owned by the publishing service. |
-| `payload` | `jsonb` | Event body published to RabbitMQ. Must be self-contained enough for downstream consumers. |
-| `headers` | `jsonb` | Publish metadata such as schema version, trace identifiers, tenant/workspace context, routing hints, and replay provenance. |
-| `status` | `text` | Lifecycle state: `pending`, `claimed`, `published`, or `failed`. |
-| `publish_attempts` | `integer` | Count of publish attempts started by the worker. |
-| `occurred_at` | `timestamptz` | Domain event time from the source transaction. |
-| `available_at` | `timestamptz` | Earliest time the row is eligible for polling or retry. |
-| `claimed_by` | `text` | Worker identity that currently holds the claim lease. Null when unclaimed. |
-| `claimed_at` | `timestamptz` | Time the current claim was taken. |
-| `published_at` | `timestamptz` | Time the worker recorded successful publish completion. |
-| `last_error` | `text` | Most recent publish failure summary for operators and retry logic. |
-| `created_at` | `timestamptz` | Row creation time in the local service database. |
+| Column             | Type          | Notes                                                                                     |
+| ------------------ | ------------- | ----------------------------------------------------------------------------------------- |
+| `event_id`         | `uuid`        | Stable unique event identifier. Also used by consumers for deduplication.                 |
+| `aggregate_type`   | `text`        | Publisher-defined aggregate kind, such as `message` or `membership`.                      |
+| `aggregate_id`     | `uuid`        | Aggregate instance identifier associated with the event.                                  |
+| `event_type`       | `text`        | Versioned integration event type name owned by the publishing service.                    |
+| `payload`          | `jsonb`       | Event body published to RabbitMQ. Must be self-contained enough for downstream consumers. |
+| `status`           | `text`        | Lifecycle state: `pending`, `claimed`, `published`, or `failed`.                          |
+| `publish_attempts` | `integer`     | Count of publish attempts started by the worker.                                          |
+| `occurred_at`      | `timestamptz` | Domain event time from the source transaction.                                            |
+| `available_at`     | `timestamptz` | Earliest time the row is eligible for polling or retry.                                   |
+| `claimed_by`       | `text`        | Worker identity that currently holds the claim lease. Null when unclaimed.                |
+| `claimed_at`       | `timestamptz` | Time the current claim was taken.                                                         |
+| `published_at`     | `timestamptz` | Time the worker recorded successful publish completion.                                   |
+| `last_error`       | `text`        | Most recent publish failure summary for operators and retry logic.                        |
+| `created_at`       | `timestamptz` | Row creation time in the local service database.                                          |
 
 ## Semantic Rules
 

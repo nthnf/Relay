@@ -2,7 +2,7 @@
 
 ## Register with a unique email and password
 
-As a new user, I can register with an email, password, username, and display name so long as the normalized email is not already owned by another account, and the system creates my active identity record, initial rotating refresh session, initial access JWT, and initial email verification token in one durable write path.
+As a new user, I can register with an email, password, username, and display name so long as the normalized email is not already owned by another account, and the system hashes my password server-side, creates my active identity record, and starts the initial email verification flow in one durable write path.
 
 ## Verify my email with a single-use token
 
