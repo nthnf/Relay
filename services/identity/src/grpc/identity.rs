@@ -800,9 +800,123 @@ impl IdentityService for IdentityServer {
 
     async fn resend_verification_email(
         &self,
-        _request: Request<ResendVerificationEmailRequest>,
+        request: Request<ResendVerificationEmailRequest>,
     ) -> Result<Response<ResendVerificationEmailResponse>, Status> {
-        self.unimplemented("resend_verification_email")
+        let ResendVerificationEmailRequest { email } = request.into_inner();
+
+        let email_normalized = email.to_lowercase();
+        let user = user_account::Entity::find()
+            .filter(user_account::Column::EmailNormalized.eq(email_normalized))
+            .one(&self.connection)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "identity resend verification email lookup failed");
+                Status::internal("internal server error")
+            })?;
+
+        let Some(user) = user else {
+            return Ok(Response::new(ResendVerificationEmailResponse {
+                accepted: true,
+            }));
+        };
+
+        if user.email_verified_at.is_some() || user.account_status != "active" {
+            return Ok(Response::new(ResendVerificationEmailResponse {
+                accepted: true,
+            }));
+        }
+
+        let now = Utc::now();
+
+        let response = self
+            .connection
+            .transaction::<_, Response<ResendVerificationEmailResponse>, Status>(|txn| {
+                Box::pin(async move {
+                    let existing_tokens = email_verification_token::Entity::find()
+                        .filter(email_verification_token::Column::UserId.eq(user.user_id))
+                        .filter(email_verification_token::Column::ConsumedAt.is_null())
+                        .filter(email_verification_token::Column::ExpiresAt.gt(now))
+                        .all(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "identity resend verification email token lookup failed");
+                            Status::internal("internal server error")
+                        })?;
+
+                    for token in existing_tokens {
+                        let mut token = token.into_active_model();
+                        token.consumed_at = Set(Some(now.into()));
+                        email_verification_token::Entity::update(token)
+                            .exec(txn)
+                            .await
+                            .map_err(|e| {
+                                error!(error = %e, "identity resend verification email existing token consume failed");
+                                Status::internal("internal server error")
+                            })?;
+                    }
+
+                    let new_token_id = Uuid::new_v4();
+                    let new_token = Uuid::new_v4().to_string();
+                    let new_token_hash = hash_token(&new_token);
+
+                    let email_verification_token = email_verification_token::ActiveModel {
+                        token_id: Set(new_token_id),
+                        token_hash: Set(new_token_hash.clone()),
+                        user_id: Set(user.user_id),
+                        created_at: Set(now.into()),
+                        expires_at: Set((now + chrono::Duration::hours(6)).into()),
+                        consumed_at: Set(None),
+                    };
+                    email_verification_token::Entity::insert(email_verification_token)
+                        .exec(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "identity resend verification email new token insert failed");
+                            Status::internal("internal server error")
+                        })?;
+
+                    let event = outbox_event::ActiveModel {
+                        event_id: Set(Uuid::new_v4()),
+                        aggregate_type: Set("user_account".to_string()),
+                        aggregate_id: Set(user.user_id),
+                        event_type: Set("VerificationEmailRequested".to_string()),
+                        created_at: Set(now.into()),
+                        available_at: Set(now.into()),
+                        occurred_at: Set(now.into()),
+                        claimed_at: Set(None),
+                        claimed_by: Set(None),
+                        published_at: Set(None),
+                        last_error: Set(None),
+                        publish_attempts: Set(0),
+                        status: Set("pending".to_string()),
+                        payload: Set(serde_json::json!({
+                            "user_id": user.user_id.to_string(),
+                            "email": user.email.clone(),
+                            "verification_token": new_token,
+                            "verification_token_expires_at": (now + chrono::Duration::hours(6)).to_rfc3339(),
+                            "verification_token_id": new_token_id.to_string(),
+                            "reason": "resend_verification",
+                            "requested_at": now.to_rfc3339(),
+                        })),
+                    };
+                    outbox_event::Entity::insert(event).exec(txn).await.map_err(|e| {
+                        error!(error = %e, "identity resend verification email outbox insert failed");
+                        Status::internal("internal server error")
+                    })?;
+
+                    Ok(Response::new(ResendVerificationEmailResponse {
+                        accepted: true,
+                    }))
+                })
+            }).await.map_err(|e| match e {
+                TransactionError::Connection(db_err) => {
+                    error!(error = %db_err, "identity resend verification email transaction connection failure");
+                    Status::internal("internal server error")
+                }
+                TransactionError::Transaction(status) => status,
+            })?;
+
+        Ok(response)
     }
 
     async fn update_user_profile(
@@ -881,6 +995,12 @@ mod tests {
     fn redeem_request(token: &str) -> Request<RedeemEmailVerificationTokenRequest> {
         Request::new(RedeemEmailVerificationTokenRequest {
             token: token.to_string(),
+        })
+    }
+
+    fn resend_request(email: &str) -> Request<ResendVerificationEmailRequest> {
+        Request::new(ResendVerificationEmailRequest {
+            email: email.to_string(),
         })
     }
 
@@ -1439,7 +1559,8 @@ mod tests {
             created_at: now.into(),
             updated_at: now.into(),
         };
-        let inserted_session = mock_refresh_session(now, user.user_id, "new-refresh-hash".to_string());
+        let inserted_session =
+            mock_refresh_session(now, user.user_id, "new-refresh-hash".to_string());
         let outbox = mock_outbox_event(now, "UserEmailVerified");
 
         let db = MockDatabase::new(DbBackend::Postgres)
@@ -1472,7 +1593,10 @@ mod tests {
         assert!(response.access_token_expires_at.is_some());
         assert!(response.refresh_token_expires_at.is_some());
         assert!(response.email_verified);
-        assert_eq!(response.profile.as_ref().map(|p| p.username.as_str()), Some("alice"));
+        assert_eq!(
+            response.profile.as_ref().map(|p| p.username.as_str()),
+            Some("alice")
+        );
 
         let claims = service
             .auth
@@ -1558,5 +1682,120 @@ mod tests {
 
         assert_eq!(error.code(), tonic::Code::NotFound);
         assert_eq!(error.message(), "invalid verification token");
+    }
+
+    #[tokio::test]
+    async fn resend_verification_email_accepts_unknown_email_without_side_effects() {
+        let db = MockDatabase::new(DbBackend::Postgres)
+            .append_query_results([Vec::<user_account::Model>::new()])
+            .into_connection();
+
+        let response = test_service(db.clone())
+            .resend_verification_email(resend_request("missing@example.com"))
+            .await
+            .expect("unknown email should still be accepted")
+            .into_inner();
+
+        assert!(response.accepted);
+
+        let statement_dump = db
+            .into_transaction_log()
+            .iter()
+            .flat_map(|transaction| transaction.statements().iter())
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(!statement_dump.contains("BEGIN"));
+        assert!(!statement_dump.contains("INSERT INTO \"outbox_event\""));
+    }
+
+    #[tokio::test]
+    async fn resend_verification_email_accepts_verified_user_without_side_effects() {
+        let now = Utc::now();
+        let user = mock_verified_user_account(now);
+        let db = MockDatabase::new(DbBackend::Postgres)
+            .append_query_results([[user]])
+            .into_connection();
+
+        let response = test_service(db.clone())
+            .resend_verification_email(resend_request("alice@example.com"))
+            .await
+            .expect("verified user should still be accepted")
+            .into_inner();
+
+        assert!(response.accepted);
+
+        let statement_dump = db
+            .into_transaction_log()
+            .iter()
+            .flat_map(|transaction| transaction.statements().iter())
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(!statement_dump.contains("BEGIN"));
+        assert!(!statement_dump.contains("INSERT INTO \"outbox_event\""));
+    }
+
+    #[tokio::test]
+    async fn resend_verification_email_replaces_active_tokens_and_writes_event() {
+        let now = Utc::now();
+        let user = mock_user_account(now);
+        let existing_token = email_verification_token::Model {
+            token_id: Uuid::new_v4(),
+            user_id: user.user_id,
+            token_hash: "existing-token-hash".to_string(),
+            expires_at: (now + Duration::hours(1)).into(),
+            consumed_at: None,
+            created_at: now.into(),
+        };
+        let consumed_token = email_verification_token::Model {
+            consumed_at: Some(now.into()),
+            ..existing_token.clone()
+        };
+        let inserted_token = email_verification_token::Model {
+            token_id: Uuid::new_v4(),
+            user_id: user.user_id,
+            token_hash: "new-token-hash".to_string(),
+            expires_at: (now + Duration::hours(6)).into(),
+            consumed_at: None,
+            created_at: now.into(),
+        };
+        let outbox = mock_outbox_event(now, "VerificationEmailRequested");
+
+        let db = MockDatabase::new(DbBackend::Postgres)
+            .append_query_results([[user.clone()]])
+            .append_query_results([[existing_token]])
+            .append_query_results([[consumed_token]])
+            .append_query_results([[inserted_token]])
+            .append_query_results([[outbox]])
+            .append_exec_results([
+                mock_exec_result(),
+                mock_exec_result(),
+                mock_exec_result(),
+            ])
+            .into_connection();
+
+        let response = test_service(db.clone())
+            .resend_verification_email(resend_request(&user.email))
+            .await
+            .expect("unverified user should trigger resend")
+            .into_inner();
+
+        assert!(response.accepted);
+
+        let statement_dump = db
+            .into_transaction_log()
+            .iter()
+            .flat_map(|transaction| transaction.statements().iter())
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(statement_dump.contains("UPDATE \"email_verification_token\""));
+        assert!(statement_dump.contains("INSERT INTO \"email_verification_token\""));
+        assert!(statement_dump.contains("VerificationEmailRequested"));
+        assert!(statement_dump.contains("resend_verification"));
     }
 }
