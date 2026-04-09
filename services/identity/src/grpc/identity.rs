@@ -20,9 +20,38 @@ use crate::entity::{
     email_verification_token, outbox_event, user_account, user_credential_password, user_profile,
     user_session,
 };
+use crate::grpc::event::{
+    SessionRevokedPayload, UserEmailVerifiedPayload, UserProfileUpdatedPayload,
+    UserRegisteredPayload, VerificationEmailRequestedPayload,
+};
 
 const EMAIL_NORMALIZED_CONSTRAINT: &str = "uq-user-account-email-normalized";
 const USERNAME_CONSTRAINT: &str = "uq-user-profile-username";
+const ACTOR_USER_ID_METADATA: &str = "x-user-id";
+
+fn to_timestamp(dt: chrono::DateTime<Utc>) -> prost_types::Timestamp {
+    prost_types::Timestamp {
+        seconds: dt.timestamp(),
+        nanos: dt.timestamp_subsec_nanos() as i32,
+    }
+}
+
+fn payload_value<T: serde::Serialize>(payload: T) -> serde_json::Value {
+    serde_json::to_value(payload).expect("event payload should serialize")
+}
+
+fn actor_user_id<T>(request: &Request<T>) -> Result<Uuid, Status> {
+    let raw = request
+        .metadata()
+        .get(ACTOR_USER_ID_METADATA)
+        .ok_or_else(|| Status::unauthenticated("missing authenticated actor context"))?;
+
+    let raw = raw
+        .to_str()
+        .map_err(|_| Status::unauthenticated("invalid authenticated actor context"))?;
+
+    Uuid::parse_str(raw).map_err(|_| Status::unauthenticated("invalid authenticated actor context"))
+}
 
 pub struct IdentityServer {
     connection: DatabaseConnection,
@@ -41,13 +70,6 @@ impl IdentityServer {
     fn unimplemented<T>(&self, name: &'static str) -> Result<Response<T>, Status> {
         let _ = (&self.connection, &self.auth);
         Err(Status::unimplemented(name))
-    }
-}
-
-fn to_timestamp(dt: chrono::DateTime<Utc>) -> prost_types::Timestamp {
-    prost_types::Timestamp {
-        seconds: dt.timestamp(),
-        nanos: dt.timestamp_subsec_nanos() as i32,
     }
 }
 
@@ -204,14 +226,14 @@ impl IdentityService for IdentityServer {
                         last_error: Set(None),
                         publish_attempts: Set(0),
                         status: Set("pending".to_string()),
-                        payload: Set(serde_json::json!({
-                            "user_id": user_id.to_string(),
-                            "email": email.clone(),
-                            "email_verified": false,
-                            "username": username.clone(),
-                            "display_name": display_name.clone(),
-                            "avatar_url": avatar_url.clone(),
-                            "registered_at": now.to_rfc3339(),
+                        payload: Set(payload_value(UserRegisteredPayload {
+                            user_id: user_id.to_string(),
+                            email: email.clone(),
+                            email_verified: false,
+                            username: username.clone(),
+                            display_name: display_name.clone(),
+                            avatar_url: avatar_url.clone(),
+                            registered_at: now.to_rfc3339(),
                         })),
                     };
                     outbox_event::Entity::insert(user_registered_event)
@@ -236,14 +258,15 @@ impl IdentityService for IdentityServer {
                         last_error: Set(None),
                         publish_attempts: Set(0),
                         status: Set("pending".to_string()),
-                        payload: Set(serde_json::json!({
-                            "user_id": user_id.to_string(),
-                            "email": email.clone(),
-                            "verification_token": verification_token.clone(),
-                            "verification_token_expires_at": (now + chrono::Duration::hours(6)).to_rfc3339(),
-                            "verification_token_id": verification_token_id.to_string(),
-                            "reason": "registration",
-                            "requested_at": now.to_rfc3339(),
+                        payload: Set(payload_value(VerificationEmailRequestedPayload {
+                            user_id: user_id.to_string(),
+                            email: email.clone(),
+                            verification_token: verification_token.clone(),
+                            verification_token_expires_at: (now + chrono::Duration::hours(6))
+                                .to_rfc3339(),
+                            verification_token_id: verification_token_id.to_string(),
+                            reason: "registration".to_string(),
+                            requested_at: now.to_rfc3339(),
                         })),
                     };
                     outbox_event::Entity::insert(email_verification_request)
@@ -299,7 +322,7 @@ impl IdentityService for IdentityServer {
         }
 
         if user.account_status != "active" {
-            return Err(Status::unauthenticated("invalid refresh token"));
+            return Err(Status::failed_precondition("account is not active"));
         }
 
         // Credential Verification
@@ -592,11 +615,11 @@ impl IdentityService for IdentityServer {
                         aggregate_type: Set("user_session".to_string()),
                         aggregate_id: Set(session_id),
                         event_type: Set("SessionRevoked".to_string()),
-                        payload: Set(serde_json::json!({
-                            "session_id": session_id.to_string(),
-                            "user_id": user_id.to_string(),
-                            "revoked_at": revoked_at.to_rfc3339(),
-                            "revoke_reason": revoke_reason,
+                        payload: Set(payload_value(SessionRevokedPayload {
+                            session_id: session_id.to_string(),
+                            user_id: user_id.to_string(),
+                            revoked_at: revoked_at.to_rfc3339(),
+                            revoke_reason: revoke_reason.clone(),
                         })),
                         status: Set("pending".to_string()),
                         publish_attempts: Set(0),
@@ -755,10 +778,10 @@ impl IdentityService for IdentityServer {
                         last_error: Set(None),
                         claimed_by: Set(None),
                         claimed_at: Set(None),
-                        payload: Set(serde_json::json!({
-                            "user_id": user_id.to_string(),
-                            "email": email.clone(),
-                            "email_verified_at": now.to_rfc3339(),
+                        payload: Set(payload_value(UserEmailVerifiedPayload {
+                            user_id: user_id.to_string(),
+                            email: email.clone(),
+                            email_verified_at: now.to_rfc3339(),
                         })),
                     };
                     outbox_event::Entity::insert(event).exec(txn).await.map_err(|e| {
@@ -889,14 +912,15 @@ impl IdentityService for IdentityServer {
                         last_error: Set(None),
                         publish_attempts: Set(0),
                         status: Set("pending".to_string()),
-                        payload: Set(serde_json::json!({
-                            "user_id": user.user_id.to_string(),
-                            "email": user.email.clone(),
-                            "verification_token": new_token,
-                            "verification_token_expires_at": (now + chrono::Duration::hours(6)).to_rfc3339(),
-                            "verification_token_id": new_token_id.to_string(),
-                            "reason": "resend_verification",
-                            "requested_at": now.to_rfc3339(),
+                        payload: Set(payload_value(VerificationEmailRequestedPayload {
+                            user_id: user.user_id.to_string(),
+                            email: user.email.clone(),
+                            verification_token: new_token,
+                            verification_token_expires_at: (now + chrono::Duration::hours(6))
+                                .to_rfc3339(),
+                            verification_token_id: new_token_id.to_string(),
+                            reason: "resend_verification".to_string(),
+                            requested_at: now.to_rfc3339(),
                         })),
                     };
                     outbox_event::Entity::insert(event).exec(txn).await.map_err(|e| {
@@ -921,9 +945,98 @@ impl IdentityService for IdentityServer {
 
     async fn update_user_profile(
         &self,
-        _request: Request<UpdateUserProfileRequest>,
+        request: Request<UpdateUserProfileRequest>,
     ) -> Result<Response<UpdateUserProfileResponse>, Status> {
-        self.unimplemented("update_user_profile")
+        let user_id = actor_user_id(&request)?;
+        let UpdateUserProfileRequest {
+            display_name,
+            avatar_url,
+        } = request.into_inner();
+
+        let now = Utc::now();
+
+        let response = self
+            .connection
+            .transaction::<_, Response<UpdateUserProfileResponse>, Status>(|txn| {
+                Box::pin(async move {
+                    let profile = user_profile::Entity::find_by_id(user_id)
+                        .one(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "identity update user profile lookup failed");
+                            Status::internal("internal server error")
+                        })?
+                        .ok_or_else(|| Status::not_found("user profile not found"))?;
+                    let username = profile.username.clone();
+                    let final_avatar_url = match avatar_url.clone() {
+                        Some(avt) => {
+                            let avt = avt.trim().to_string();
+                            if avt.is_empty() {
+                                None
+                            } else {
+                                Some(avt)
+                            }
+                        }
+                        None => profile.avatar_url.clone(),
+                    };
+
+                    let mut profile = profile.into_active_model();
+                    profile.display_name = Set(display_name.clone());
+                    if avatar_url.is_some() {
+                        profile.avatar_url = Set(final_avatar_url.clone());
+                    }
+                    user_profile::Entity::update(profile)
+                        .exec(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "identity update user profile update failed");
+                            Status::internal("internal server error")
+                        })?;
+
+                    let event = outbox_event::ActiveModel {
+                        event_id: Set(Uuid::new_v4()),
+                        aggregate_type: Set("user_profile".to_string()),
+                        aggregate_id: Set(user_id),
+                        event_type: Set("UserProfileUpdated".to_string()),
+                        status: Set("pending".to_string()),
+                        publish_attempts: Set(0),
+                        created_at: Set(now.into()),
+                        available_at: Set(now.into()),
+                        occurred_at: Set(now.into()),
+                        claimed_by: Set(None),
+                        claimed_at: Set(None),
+                        published_at: Set(None),
+                        last_error: Set(None),
+                        payload: Set(payload_value(UserProfileUpdatedPayload {
+                            user_id: user_id.to_string(),
+                            username: username.clone(),
+                            display_name: display_name.clone(),
+                            avatar_url: final_avatar_url.clone(),
+                            updated_at: now.to_rfc3339(),
+                        })),
+                    };
+                    outbox_event::Entity::insert(event).exec(txn).await.map_err(|e| {
+                        error!(error = %e, "identity update user profile outbox insert failed");
+                        Status::internal("internal server error")
+                    })?;
+
+                    Ok(Response::new(UpdateUserProfileResponse {
+                        user_id: user_id.to_string(),
+                        username,
+                        updated_at: Some(to_timestamp(now)),
+                        display_name,
+                        avatar_url: final_avatar_url,
+                    }))
+                })
+            }).await.map_err(|e| match e {
+                TransactionError::Connection(db_err) => {
+                    error!(error = %db_err, "identity update user profile transaction connection failure");
+                    Status::internal("internal server error")
+                }
+                TransactionError::Transaction(status) => status,
+            })?;
+
+        Ok(response)
     }
 
     async fn get_user_profile(
@@ -1002,6 +1115,29 @@ mod tests {
         Request::new(ResendVerificationEmailRequest {
             email: email.to_string(),
         })
+    }
+
+    fn update_profile_request(
+        user_id: Option<Uuid>,
+        display_name: &str,
+        avatar_url: Option<&str>,
+    ) -> Request<UpdateUserProfileRequest> {
+        let mut request = Request::new(UpdateUserProfileRequest {
+            display_name: display_name.to_string(),
+            avatar_url: avatar_url.map(str::to_string),
+        });
+
+        if let Some(user_id) = user_id {
+            request.metadata_mut().insert(
+                ACTOR_USER_ID_METADATA,
+                user_id
+                    .to_string()
+                    .parse()
+                    .expect("user id metadata should be valid"),
+            );
+        }
+
+        request
     }
 
     fn mock_user_account(now: chrono::DateTime<Utc>) -> user_account::Model {
@@ -1770,11 +1906,7 @@ mod tests {
             .append_query_results([[consumed_token]])
             .append_query_results([[inserted_token]])
             .append_query_results([[outbox]])
-            .append_exec_results([
-                mock_exec_result(),
-                mock_exec_result(),
-                mock_exec_result(),
-            ])
+            .append_exec_results([mock_exec_result(), mock_exec_result(), mock_exec_result()])
             .into_connection();
 
         let response = test_service(db.clone())
@@ -1797,5 +1929,73 @@ mod tests {
         assert!(statement_dump.contains("INSERT INTO \"email_verification_token\""));
         assert!(statement_dump.contains("VerificationEmailRequested"));
         assert!(statement_dump.contains("resend_verification"));
+    }
+
+    #[tokio::test]
+    async fn update_user_profile_requires_actor_context() {
+        let db = MockDatabase::new(DbBackend::Postgres).into_connection();
+
+        let error = test_service(db)
+            .update_user_profile(update_profile_request(None, "Alice Updated", None))
+            .await
+            .expect_err("missing actor metadata should fail");
+
+        assert_eq!(error.code(), tonic::Code::Unauthenticated);
+        assert_eq!(error.message(), "missing authenticated actor context");
+    }
+
+    #[tokio::test]
+    async fn update_user_profile_clears_avatar_and_writes_outbox() {
+        let now = Utc::now();
+        let user_id = Uuid::new_v4();
+        let profile = user_profile::Model {
+            user_id,
+            username: "alice".to_string(),
+            display_name: "Alice".to_string(),
+            avatar_url: Some("https://cdn.example.com/alice.png".to_string()),
+            created_at: now.into(),
+            updated_at: now.into(),
+        };
+        let updated_profile = user_profile::Model {
+            display_name: "Alice Updated".to_string(),
+            avatar_url: None,
+            ..profile.clone()
+        };
+        let outbox = mock_outbox_event(now, "UserProfileUpdated");
+
+        let db = MockDatabase::new(DbBackend::Postgres)
+            .append_query_results([[profile]])
+            .append_query_results([[updated_profile]])
+            .append_query_results([[outbox]])
+            .append_exec_results([mock_exec_result(), mock_exec_result()])
+            .into_connection();
+
+        let response = test_service(db.clone())
+            .update_user_profile(update_profile_request(
+                Some(user_id),
+                "Alice Updated",
+                Some("   "),
+            ))
+            .await
+            .expect("profile update should succeed")
+            .into_inner();
+
+        assert_eq!(response.user_id, user_id.to_string());
+        assert_eq!(response.username, "alice");
+        assert_eq!(response.display_name, "Alice Updated");
+        assert_eq!(response.avatar_url, None);
+        assert!(response.updated_at.is_some());
+
+        let statement_dump = db
+            .into_transaction_log()
+            .iter()
+            .flat_map(|transaction| transaction.statements().iter())
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(statement_dump.contains("UPDATE \"user_profile\""));
+        assert!(statement_dump.contains("UserProfileUpdated"));
+        assert!(statement_dump.contains("Alice Updated"));
     }
 }
