@@ -377,7 +377,7 @@ impl IdentityService for IdentityServer {
                         })?;
 
                     Ok(profile)
-                })
+})
             })
             .await
             .map_err(|e| match e {
@@ -546,6 +546,7 @@ impl IdentityService for IdentityServer {
             revoke_reason,
         } = request.into_inner();
 
+        // Check if session exists and is not already revoked
         let session_id = Uuid::parse_str(&session_id)
             .map_err(|_| Status::invalid_argument("invalid session_id"))?;
 
@@ -573,10 +574,10 @@ impl IdentityService for IdentityServer {
             .connection
             .transaction::<_, Response<RevokeSessionResponse>, Status>(|txn| {
                 Box::pin(async move {
+                    // Revoke the session
                     let mut session = session.into_active_model();
                     session.revoked_at = Set(Some(revoked_at.into()));
                     session.revoke_reason = Set(Some(revoke_reason.clone()));
-
                     user_session::Entity::update(session)
                         .exec(txn)
                         .await
@@ -585,6 +586,7 @@ impl IdentityService for IdentityServer {
                             Status::internal("internal server error")
                         })?;
 
+                    // Insert outbox event for session revocation
                     outbox_event::Entity::insert(outbox_event::ActiveModel {
                         event_id: Set(Uuid::new_v4()),
                         aggregate_type: Set("user_session".to_string()),
@@ -633,9 +635,167 @@ impl IdentityService for IdentityServer {
 
     async fn redeem_email_verification_token(
         &self,
-        _request: Request<RedeemEmailVerificationTokenRequest>,
+        request: Request<RedeemEmailVerificationTokenRequest>,
     ) -> Result<Response<TokenPairResponse>, Status> {
-        self.unimplemented("redeem_email_verification_token")
+        let RedeemEmailVerificationTokenRequest { token } = request.into_inner();
+
+        // Check if token exists, is not consumed, and is not expired
+        let existing_token = email_verification_token::Entity::find()
+            .filter(email_verification_token::Column::TokenHash.eq(hash_token(&token)))
+            .one(&self.connection)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "identity redeem verification token lookup failed");
+                Status::internal("internal server error")
+            })?
+            .ok_or_else(|| Status::not_found("invalid verification token"))?;
+        if existing_token.consumed_at.is_some() {
+            return Err(Status::not_found("invalid verification token"));
+        }
+        if existing_token.expires_at < Utc::now() {
+            return Err(Status::not_found("invalid verification token"));
+        }
+
+        // Create Session and Tokens
+        let user_id = existing_token.user_id;
+        let now = Utc::now();
+        let session_id = Uuid::new_v4();
+        let refresh_token = Uuid::new_v4().to_string();
+        let refresh_token_hash = hash_token(&refresh_token);
+        let access_token = self
+            .auth
+            .sign_access_token(crate::auth::AccessClaims {
+                user_id,
+                session_id,
+            })
+            .map_err(|e| {
+                error!(error = %e, "identity refresh session access token signing failed");
+                Status::internal("internal server error")
+            })?;
+
+        // Check if user exists and is eligible for authentication
+        let account = user_account::Entity::find_by_id(user_id)
+            .one(&self.connection)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "identity redeem verification token user lookup failed");
+                Status::internal("internal server error")
+            })?
+            .ok_or_else(|| Status::internal("internal server error"))?;
+        if account.account_status != "active" {
+            return Err(Status::failed_precondition("account is not active"));
+        }
+        let email = account.email.clone();
+
+        // Pull user profile
+        let profile = user_profile::Entity::find_by_id(user_id)
+            .one(&self.connection)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "identity redeem verification token user profile lookup failed");
+                Status::internal("internal server error")
+            })?
+            .ok_or_else(|| Status::internal("internal server error"))?;
+
+        let response = self
+            .connection
+            .transaction::<_, Response<TokenPairResponse>, Status>(|txn| {
+                Box::pin(async move {
+                    let mut account = account.into_active_model();
+                    account.email_verified_at = Set(Some(now.into()));
+                    user_account::Entity::update(account)
+                        .exec(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "identity redeem verification token account update failed");
+                            Status::internal("internal server error")
+                        })?;
+
+                    let mut email_verification_token = existing_token.into_active_model();
+                    email_verification_token.consumed_at = Set(Some(now.into()));
+                    email_verification_token::Entity::update(email_verification_token)
+                        .exec(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "identity redeem verification token update failed");
+                            Status::internal("internal server error")
+                        })?;
+
+                    let session = user_session::ActiveModel {
+                        session_id: Set(session_id),
+                        user_id: Set(user_id),
+                        refresh_token_hash: Set(refresh_token_hash),
+                        issued_at: Set(now.into()),
+                        created_at: Set(now.into()),
+                        refresh_expires_at: Set((now + chrono::Duration::days(7)).into()),
+                        replaced_by_session_id: Set(None),
+                        revoke_reason: Set(None),
+                        revoked_at: Set(None),
+                        client_instance_id: Set(None),
+                    };
+                    user_session::Entity::insert(session)
+                        .exec(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "identity redeem verification token session insert failed");
+                            Status::internal("internal server error")
+                        })?;
+
+                    let event = outbox_event::ActiveModel {
+                        event_id: Set(Uuid::new_v4()),
+                        aggregate_type: Set("user_account".to_string()),
+                        aggregate_id: Set(user_id),
+                        event_type: Set("UserEmailVerified".to_string()),
+                        status: Set("pending".to_string()),
+                        created_at: Set(now.into()),
+                        available_at: Set(now.into()),
+                        occurred_at: Set(now.into()),
+                        publish_attempts: Set(0),
+                        published_at: Set(None),
+                        last_error: Set(None),
+                        claimed_by: Set(None),
+                        claimed_at: Set(None),
+                        payload: Set(serde_json::json!({
+                            "user_id": user_id.to_string(),
+                            "email": email.clone(),
+                            "email_verified_at": now.to_rfc3339(),
+                        })),
+                    };
+                    outbox_event::Entity::insert(event).exec(txn).await.map_err(|e| {
+                        error!(error = %e, "identity redeem verification token UserEmailVerified outbox insert failed");
+                        Status::internal("internal server error")
+                    })?;
+
+                    Ok(Response::new(TokenPairResponse {
+                        user_id: user_id.to_string(),
+                        session_id: session_id.to_string(),
+                        access_token,
+                        access_token_expires_at: Some(to_timestamp(
+                            now + Duration::from_std(ACCESS_TOKEN_VALIDITY)
+                                .expect("access token validity should fit chrono"),
+                        )),
+                        refresh_token,
+                        refresh_token_expires_at: Some(to_timestamp(now + Duration::days(7))),
+                        email_verified: true,
+                        profile: Some(relay_proto::identity::UserProfile {
+                            user_id: profile.user_id.to_string(),
+                            username: profile.username,
+                            display_name: profile.display_name,
+                            avatar_url: profile.avatar_url,
+                        }),
+                    }))
+                })
+            })
+            .await
+            .map_err(|e| match e {
+            TransactionError::Connection(db_err) => {
+                error!(error = %db_err, "identity redeem verification token transaction connection failure");
+                Status::internal("internal server error")
+            }
+            TransactionError::Transaction(status) => status,
+        })?;
+
+        Ok(response)
     }
 
     async fn resend_verification_email(
@@ -715,6 +875,12 @@ mod tests {
         Request::new(RevokeSessionRequest {
             session_id: session_id.to_string(),
             revoke_reason: revoke_reason.map(str::to_string),
+        })
+    }
+
+    fn redeem_request(token: &str) -> Request<RedeemEmailVerificationTokenRequest> {
+        Request::new(RedeemEmailVerificationTokenRequest {
+            token: token.to_string(),
         })
     }
 
@@ -1242,5 +1408,155 @@ mod tests {
 
         assert_eq!(error.code(), tonic::Code::InvalidArgument);
         assert_eq!(error.message(), "invalid session_id");
+    }
+
+    #[tokio::test]
+    async fn redeem_email_verification_token_creates_first_session_and_outbox() {
+        let now = Utc::now();
+        let user = mock_user_account(now);
+        let token = "verification-token-value";
+        let existing_token = email_verification_token::Model {
+            token_id: Uuid::new_v4(),
+            user_id: user.user_id,
+            token_hash: hash_token(token),
+            expires_at: (now + Duration::hours(1)).into(),
+            consumed_at: None,
+            created_at: now.into(),
+        };
+        let updated_account = user_account::Model {
+            email_verified_at: Some(now.into()),
+            ..user.clone()
+        };
+        let updated_token = email_verification_token::Model {
+            consumed_at: Some(now.into()),
+            ..existing_token.clone()
+        };
+        let profile = user_profile::Model {
+            user_id: user.user_id,
+            username: "alice".to_string(),
+            display_name: "Alice".to_string(),
+            avatar_url: Some("https://cdn.example.com/alice.png".to_string()),
+            created_at: now.into(),
+            updated_at: now.into(),
+        };
+        let inserted_session = mock_refresh_session(now, user.user_id, "new-refresh-hash".to_string());
+        let outbox = mock_outbox_event(now, "UserEmailVerified");
+
+        let db = MockDatabase::new(DbBackend::Postgres)
+            .append_query_results([[existing_token]])
+            .append_query_results([[user.clone()]])
+            .append_query_results([[profile.clone()]])
+            .append_query_results([[updated_account]])
+            .append_query_results([[updated_token]])
+            .append_query_results([[inserted_session]])
+            .append_query_results([[outbox]])
+            .append_exec_results([
+                mock_exec_result(),
+                mock_exec_result(),
+                mock_exec_result(),
+                mock_exec_result(),
+            ])
+            .into_connection();
+
+        let service = test_service(db.clone());
+        let response = service
+            .redeem_email_verification_token(redeem_request(token))
+            .await
+            .expect("redeem should succeed")
+            .into_inner();
+
+        assert_eq!(response.user_id, user.user_id.to_string());
+        assert!(!response.session_id.is_empty());
+        assert!(!response.access_token.is_empty());
+        assert!(!response.refresh_token.is_empty());
+        assert!(response.access_token_expires_at.is_some());
+        assert!(response.refresh_token_expires_at.is_some());
+        assert!(response.email_verified);
+        assert_eq!(response.profile.as_ref().map(|p| p.username.as_str()), Some("alice"));
+
+        let claims = service
+            .auth
+            .verify_access_token(&response.access_token)
+            .expect("access token should verify");
+        assert_eq!(claims.user_id, user.user_id);
+        assert_eq!(claims.session_id.to_string(), response.session_id);
+
+        let statement_dump = db
+            .into_transaction_log()
+            .iter()
+            .flat_map(|transaction| transaction.statements().iter())
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(statement_dump.contains("UPDATE \"user_account\""));
+        assert!(statement_dump.contains("UPDATE \"email_verification_token\""));
+        assert!(statement_dump.contains("INSERT INTO \"user_session\""));
+        assert!(statement_dump.contains("UserEmailVerified"));
+    }
+
+    #[tokio::test]
+    async fn redeem_email_verification_token_rejects_unknown_token() {
+        let db = MockDatabase::new(DbBackend::Postgres)
+            .append_query_results([Vec::<email_verification_token::Model>::new()])
+            .into_connection();
+
+        let error = test_service(db)
+            .redeem_email_verification_token(redeem_request("missing-token"))
+            .await
+            .expect_err("unknown token should fail");
+
+        assert_eq!(error.code(), tonic::Code::NotFound);
+        assert_eq!(error.message(), "invalid verification token");
+    }
+
+    #[tokio::test]
+    async fn redeem_email_verification_token_rejects_consumed_token() {
+        let now = Utc::now();
+        let token = "consumed-token";
+        let existing_token = email_verification_token::Model {
+            token_id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            token_hash: hash_token(token),
+            expires_at: (now + Duration::hours(1)).into(),
+            consumed_at: Some(now.into()),
+            created_at: now.into(),
+        };
+        let db = MockDatabase::new(DbBackend::Postgres)
+            .append_query_results([[existing_token]])
+            .into_connection();
+
+        let error = test_service(db)
+            .redeem_email_verification_token(redeem_request(token))
+            .await
+            .expect_err("consumed token should fail");
+
+        assert_eq!(error.code(), tonic::Code::NotFound);
+        assert_eq!(error.message(), "invalid verification token");
+    }
+
+    #[tokio::test]
+    async fn redeem_email_verification_token_rejects_expired_token() {
+        let now = Utc::now();
+        let token = "expired-token";
+        let existing_token = email_verification_token::Model {
+            token_id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            token_hash: hash_token(token),
+            expires_at: (now - Duration::seconds(1)).into(),
+            consumed_at: None,
+            created_at: now.into(),
+        };
+        let db = MockDatabase::new(DbBackend::Postgres)
+            .append_query_results([[existing_token]])
+            .into_connection();
+
+        let error = test_service(db)
+            .redeem_email_verification_token(redeem_request(token))
+            .await
+            .expect_err("expired token should fail");
+
+        assert_eq!(error.code(), tonic::Code::NotFound);
+        assert_eq!(error.message(), "invalid verification token");
     }
 }
