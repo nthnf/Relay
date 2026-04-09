@@ -97,7 +97,7 @@ Identity exposes synchronous account, refresh-session, and profile-basic contrac
 **Request fields**
 
 - `refresh_token` (`string`)
-- `client_instance_id` (`uuid optional`)
+- `client_instance_id` (`uuid optional`, reserved for a future session-binding hardening step and ignored in v1)
 
 **Response fields**
 
@@ -115,7 +115,7 @@ Identity exposes synchronous account, refresh-session, and profile-basic contrac
 - Identity resolves the refresh token to `user_session`, verifies `refresh_token_hash`, and rejects expired, revoked, rotated, or disabled-account sessions.
 - Successful refresh revokes the old refresh session, creates a new refresh session row, and returns a new access token plus refresh token pair.
 - The old refresh token must no longer be usable after a successful refresh.
-- If the stored session row has a non-null `client_instance_id`, a missing request value or mismatched request value makes the refresh invalid.
+- `client_instance_id` is carried in the request contract for forward compatibility but is ignored in v1.
 
 ### `RevokeSession`
 

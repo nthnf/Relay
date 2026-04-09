@@ -90,8 +90,7 @@ Semantic rules:
 - A refresh session is also invalid when the owning `user_account.account_status` is `disabled`.
 - `refresh_token_hash` prevents storing reusable refresh-token material in plaintext.
 - Successful refresh rotates the current session by setting `revoked_at`, `revoke_reason = rotated`, and `replaced_by_session_id`, then creating a new `user_session` row in the same transaction.
-- If `client_instance_id` is set on the row, `RefreshSession` must receive the same value or reject the refresh as invalid.
-- If `client_instance_id` is null on the row, `RefreshSession` does not require a request `client_instance_id` and does not enforce client-instance matching for that session.
+- `client_instance_id` is retained in the schema for future session-binding hardening, but v1 refresh flows do not enforce client-instance matching.
 - Short-lived access tokens are minted by identity but validated at Envoy Gateway on protected routes rather than looked up in this table on every request.
 
 ### `email_verification_token`
