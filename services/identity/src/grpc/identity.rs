@@ -541,9 +541,94 @@ impl IdentityService for IdentityServer {
         &self,
         request: Request<RevokeSessionRequest>,
     ) -> Result<Response<RevokeSessionResponse>, Status> {
-        todo!(
-            "implement session revocation by setting revoked_at and revoke_reason on the session record"
-        );
+        let RevokeSessionRequest {
+            session_id,
+            revoke_reason,
+        } = request.into_inner();
+
+        let session_id = Uuid::parse_str(&session_id)
+            .map_err(|_| Status::invalid_argument("invalid session_id"))?;
+
+        let session = user_session::Entity::find_by_id(session_id)
+            .one(&self.connection)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "identity revoke session lookup failed");
+                Status::internal("internal server error")
+            })?
+            .ok_or_else(|| Status::unauthenticated("invalid session"))?;
+
+        if let Some(revoked_at) = session.revoked_at {
+            return Ok(Response::new(RevokeSessionResponse {
+                revoked: true,
+                revoked_at: Some(to_timestamp(revoked_at.into())),
+            }));
+        }
+
+        let user_id = session.user_id;
+        let revoked_at = Utc::now();
+        let revoke_reason = revoke_reason.unwrap_or_else(|| "logout".to_string());
+
+        let response = self
+            .connection
+            .transaction::<_, Response<RevokeSessionResponse>, Status>(|txn| {
+                Box::pin(async move {
+                    let mut session = session.into_active_model();
+                    session.revoked_at = Set(Some(revoked_at.into()));
+                    session.revoke_reason = Set(Some(revoke_reason.clone()));
+
+                    user_session::Entity::update(session)
+                        .exec(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "identity revoke session update failed");
+                            Status::internal("internal server error")
+                        })?;
+
+                    outbox_event::Entity::insert(outbox_event::ActiveModel {
+                        event_id: Set(Uuid::new_v4()),
+                        aggregate_type: Set("user_session".to_string()),
+                        aggregate_id: Set(session_id),
+                        event_type: Set("SessionRevoked".to_string()),
+                        payload: Set(serde_json::json!({
+                            "session_id": session_id.to_string(),
+                            "user_id": user_id.to_string(),
+                            "revoked_at": revoked_at.to_rfc3339(),
+                            "revoke_reason": revoke_reason,
+                        })),
+                        status: Set("pending".to_string()),
+                        publish_attempts: Set(0),
+                        occurred_at: Set(revoked_at.into()),
+                        available_at: Set(revoked_at.into()),
+                        claimed_by: Set(None),
+                        claimed_at: Set(None),
+                        published_at: Set(None),
+                        last_error: Set(None),
+                        created_at: Set(revoked_at.into()),
+                    })
+                    .exec(txn)
+                    .await
+                    .map_err(|e| {
+                        error!(error = %e, "identity revoke session outbox insert failed");
+                        Status::internal("internal server error")
+                    })?;
+
+                    Ok(Response::new(RevokeSessionResponse {
+                        revoked: true,
+                        revoked_at: Some(to_timestamp(revoked_at)),
+                    }))
+                })
+            })
+            .await
+            .map_err(|e| match e {
+                TransactionError::Connection(db_err) => {
+                    error!(error = %db_err, "identity revoke session transaction connection failure");
+                    Status::internal("internal server error")
+                }
+                TransactionError::Transaction(status) => status,
+            })?;
+
+        Ok(response)
     }
 
     async fn redeem_email_verification_token(
@@ -620,6 +705,16 @@ mod tests {
         Request::new(RefreshSessionRequest {
             refresh_token: token.to_string(),
             client_instance_id: None,
+        })
+    }
+
+    fn revoke_request(
+        session_id: &str,
+        revoke_reason: Option<&str>,
+    ) -> Request<RevokeSessionRequest> {
+        Request::new(RevokeSessionRequest {
+            session_id: session_id.to_string(),
+            revoke_reason: revoke_reason.map(str::to_string),
         })
     }
 
@@ -1059,5 +1154,93 @@ mod tests {
 
         assert!(!statement_dump.contains("UPDATE \"user_session\""));
         assert!(!statement_dump.contains("INSERT INTO \"user_session\""));
+    }
+
+    #[tokio::test]
+    async fn revoke_session_updates_session_and_writes_outbox() {
+        let now = Utc::now();
+        let session = mock_refresh_session(now, Uuid::new_v4(), "refresh-hash".to_string());
+        let updated_session = user_session::Model {
+            revoked_at: Some(now.into()),
+            revoke_reason: Some("logout".to_string()),
+            ..session.clone()
+        };
+        let outbox = mock_outbox_event(now, "SessionRevoked");
+        let db = MockDatabase::new(DbBackend::Postgres)
+            .append_query_results([[session.clone()]])
+            .append_query_results([[updated_session]])
+            .append_query_results([[outbox]])
+            .append_exec_results([mock_exec_result(), mock_exec_result()])
+            .into_connection();
+
+        let response = test_service(db.clone())
+            .revoke_session(revoke_request(&session.session_id.to_string(), None))
+            .await
+            .expect("revoke should succeed")
+            .into_inner();
+
+        assert!(response.revoked);
+        assert!(response.revoked_at.is_some());
+
+        let statement_dump = db
+            .into_transaction_log()
+            .iter()
+            .flat_map(|transaction| transaction.statements().iter())
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(statement_dump.contains("UPDATE \"user_session\""));
+        assert!(statement_dump.contains("SessionRevoked"));
+        assert!(statement_dump.contains("logout"));
+    }
+
+    #[tokio::test]
+    async fn revoke_session_is_idempotent_for_already_revoked_session() {
+        let now = Utc::now();
+        let session = user_session::Model {
+            revoked_at: Some(now.into()),
+            revoke_reason: Some("logout".to_string()),
+            ..mock_refresh_session(now, Uuid::new_v4(), "refresh-hash".to_string())
+        };
+        let db = MockDatabase::new(DbBackend::Postgres)
+            .append_query_results([[session.clone()]])
+            .into_connection();
+
+        let response = test_service(db.clone())
+            .revoke_session(revoke_request(
+                &session.session_id.to_string(),
+                Some("logout"),
+            ))
+            .await
+            .expect("already revoked session should still succeed")
+            .into_inner();
+
+        assert!(response.revoked);
+        assert!(response.revoked_at.is_some());
+
+        let statement_dump = db
+            .into_transaction_log()
+            .iter()
+            .flat_map(|transaction| transaction.statements().iter())
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(!statement_dump.contains("UPDATE \"user_session\""));
+        assert!(!statement_dump.contains("SessionRevoked"));
+    }
+
+    #[tokio::test]
+    async fn revoke_session_rejects_invalid_session_id() {
+        let db = MockDatabase::new(DbBackend::Postgres).into_connection();
+
+        let error = test_service(db)
+            .revoke_session(revoke_request("not-a-uuid", None))
+            .await
+            .expect_err("invalid session id should fail");
+
+        assert_eq!(error.code(), tonic::Code::InvalidArgument);
+        assert_eq!(error.message(), "invalid session_id");
     }
 }
