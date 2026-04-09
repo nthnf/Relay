@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use relay_proto::identity::identity_service_server::{IdentityService, IdentityServiceServer};
 use relay_proto::identity::{
     AuthenticatePasswordRequest, GetUserProfileRequest, GetUserProfileResponse,
@@ -15,9 +15,10 @@ use tonic::{Request, Response, Status};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::auth::{AuthKeys, hash_password, hash_token};
+use crate::auth::{ACCESS_TOKEN_VALIDITY, AuthKeys, hash_password, hash_token, verify_password};
 use crate::entity::{
     email_verification_token, outbox_event, user_account, user_credential_password, user_profile,
+    user_session,
 };
 
 const EMAIL_NORMALIZED_CONSTRAINT: &str = "uq-user-account-email-normalized";
@@ -40,6 +41,13 @@ impl IdentityServer {
     fn unimplemented<T>(&self, name: &'static str) -> Result<Response<T>, Status> {
         let _ = (&self.connection, &self.auth);
         Err(Status::unimplemented(name))
+    }
+}
+
+fn to_timestamp(dt: chrono::DateTime<Utc>) -> prost_types::Timestamp {
+    prost_types::Timestamp {
+        seconds: dt.timestamp(),
+        nanos: dt.timestamp_subsec_nanos() as i32,
     }
 }
 
@@ -249,10 +257,7 @@ impl IdentityService for IdentityServer {
                     Ok(Response::new(RegisterUserResponse {
                         user_id: user_id.to_string(),
                         email,
-                        verification_email_requested_at: Some(prost_types::Timestamp {
-                            seconds: now.timestamp(),
-                            nanos: now.timestamp_subsec_nanos() as i32,
-                        }),
+                        verification_email_requested_at: Some(to_timestamp(now)),
                     }))
                 })
             })
@@ -270,9 +275,145 @@ impl IdentityService for IdentityServer {
 
     async fn authenticate_password(
         &self,
-        _request: Request<AuthenticatePasswordRequest>,
+        request: Request<AuthenticatePasswordRequest>,
     ) -> Result<Response<TokenPairResponse>, Status> {
-        self.unimplemented("authenticate_password")
+        let AuthenticatePasswordRequest {
+            email,
+            password,
+            client_instance_id,
+        } = request.into_inner();
+        let email_normalized = email.to_lowercase();
+        let client_instance_id = client_instance_id
+            .map(|id| {
+                Uuid::parse_str(&id)
+                    .map_err(|_| Status::invalid_argument("invalid client_instance_id"))
+            })
+            .transpose()?;
+
+        // Check if user exists and is eligible for authentication
+        let user = user_account::Entity::find()
+            .filter(user_account::Column::EmailNormalized.eq(email_normalized))
+            .one(&self.connection)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "identity authentication lookup failed");
+                Status::internal("internal server error")
+            })?;
+
+        let user = user.ok_or_else(|| Status::unauthenticated("invalid credentials"))?;
+
+        if user.email_verified_at.is_none() {
+            return Err(Status::failed_precondition("email not verified"));
+        }
+
+        if user.account_status != "active" {
+            return Err(Status::failed_precondition("account is not active"));
+        }
+
+        // Credential Verification
+        let hashed_password = user_credential_password::Entity::find_by_id(user.user_id)
+            .one(&self.connection)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "identity authentication credential lookup failed");
+                Status::internal("internal server error")
+            })?
+            .ok_or_else(|| Status::unauthenticated("invalid credentials"))?
+            .password_hash;
+
+        verify_password(&password, &hashed_password)
+            .map_err(|e| {
+                error!(error = %e, "identity password verification failed");
+                Status::internal("internal server error")
+            })
+            .and_then(|is_valid| {
+                if is_valid {
+                    Ok(())
+                } else {
+                    Err(Status::unauthenticated("invalid credentials"))
+                }
+            })?;
+
+        // Token & Session
+        let session_id = Uuid::new_v4();
+        let refresh_token = Uuid::new_v4().to_string();
+        let refresh_token_hash = hash_token(&refresh_token);
+        let now = Utc::now();
+
+        let access_token = self
+            .auth
+            .sign_access_token(crate::auth::AccessClaims {
+                user_id: user.user_id,
+                session_id,
+            })
+            .map_err(|e| {
+                error!(error = %e, "identity access token signing failed");
+                Status::internal("internal server error")
+            })?;
+
+        let profile = self
+            .connection
+            .transaction::<_, user_profile::Model, Status>(|txn| {
+                Box::pin(async move {
+                    let profile = user_profile::Entity::find_by_id(user.user_id)
+                        .one(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "identity user profile lookup failed");
+                            Status::internal("internal server error")
+                        })?
+                        .ok_or_else(|| Status::internal("internal server error"))?;
+
+                    let session = user_session::ActiveModel {
+                        session_id: Set(session_id),
+                        user_id: Set(user.user_id),
+                        refresh_token_hash: Set(refresh_token_hash),
+                        issued_at: Set(now.into()),
+                        created_at: Set(now.into()),
+                        refresh_expires_at: Set((now + chrono::Duration::days(7)).into()),
+                        replaced_by_session_id: Set(None),
+                        revoke_reason: Set(None),
+                        revoked_at: Set(None),
+                        client_instance_id: Set(client_instance_id),
+                    };
+                    user_session::Entity::insert(session)
+                        .exec(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "identity session insert failed");
+                            Status::internal("internal server error")
+                        })?;
+
+                    Ok(profile)
+                })
+            })
+            .await
+            .map_err(|e| match e {
+                TransactionError::Connection(db_err) => {
+                    error!(error = %db_err, "identity authentication transaction connection failure");
+                    Status::internal("internal server error")
+                }
+                TransactionError::Transaction(status) => status,
+            })?;
+
+        Ok(Response::new(TokenPairResponse {
+            user_id: user.user_id.to_string(),
+            session_id: session_id.to_string(),
+            access_token,
+            access_token_expires_at: Some(to_timestamp(
+                now + Duration::from_std(ACCESS_TOKEN_VALIDITY)
+                    .expect("access token validity should fit chrono"),
+            )),
+            refresh_token,
+            refresh_token_expires_at: Some(to_timestamp(now + Duration::days(7))),
+            email_verified: user.email_verified_at.is_some(),
+            profile: Some(relay_proto::identity::UserProfile {
+                user_id: profile.user_id.to_string(),
+                username: profile.username,
+                display_name: profile.display_name,
+                avatar_url: profile.avatar_url,
+            }),
+        }))
     }
 
     async fn refresh_session(
@@ -351,6 +492,14 @@ mod tests {
         }
     }
 
+    fn authenticate_request() -> Request<AuthenticatePasswordRequest> {
+        Request::new(AuthenticatePasswordRequest {
+            email: "Alice@Example.com".to_string(),
+            password: "plain-password".to_string(),
+            client_instance_id: Some("550e8400-e29b-41d4-a716-446655440000".to_string()),
+        })
+    }
+
     fn mock_user_account(now: chrono::DateTime<Utc>) -> user_account::Model {
         user_account::Model {
             user_id: Uuid::new_v4(),
@@ -360,6 +509,13 @@ mod tests {
             account_status: "active".to_string(),
             created_at: now.into(),
             updated_at: now.into(),
+        }
+    }
+
+    fn mock_verified_user_account(now: chrono::DateTime<Utc>) -> user_account::Model {
+        user_account::Model {
+            email_verified_at: Some(now.into()),
+            ..mock_user_account(now)
         }
     }
 
@@ -489,7 +645,11 @@ mod tests {
         assert!(response.verification_email_requested_at.is_some());
 
         let transaction_log = db.into_transaction_log();
-        assert_eq!(transaction_log.len(), 2, "registration should log the precheck and one transaction");
+        assert_eq!(
+            transaction_log.len(),
+            2,
+            "registration should log the precheck and one transaction"
+        );
 
         let statement_dump = transaction_log
             .iter()
@@ -502,5 +662,112 @@ mod tests {
         assert!(statement_dump.contains("VerificationEmailRequested"));
         assert!(statement_dump.contains("user_account"));
         assert!(statement_dump.contains("verification_token"));
+    }
+
+    #[tokio::test]
+    async fn authenticate_password_returns_tokens_and_creates_session() {
+        let now = Utc::now();
+        let user = mock_verified_user_account(now);
+        let password_hash = hash_password("plain-password").expect("hashing should succeed");
+        let db = MockDatabase::new(DbBackend::Postgres)
+            .append_query_results([[user.clone()]])
+            .append_query_results([[user_credential_password::Model {
+                user_id: user.user_id,
+                password_hash,
+                password_updated_at: now.into(),
+                failed_attempt_count: 0,
+                created_at: now.into(),
+                updated_at: now.into(),
+            }]])
+            .append_query_results([[user_profile::Model {
+                user_id: user.user_id,
+                username: "alice".to_string(),
+                display_name: "Alice".to_string(),
+                avatar_url: Some("https://cdn.example.com/alice.png".to_string()),
+                created_at: now.into(),
+                updated_at: now.into(),
+            }]])
+            .append_query_results([[user_session::Model {
+                session_id: Uuid::new_v4(),
+                user_id: user.user_id,
+                refresh_token_hash: "mock-refresh-hash".to_string(),
+                issued_at: now.into(),
+                refresh_expires_at: (now + Duration::days(7)).into(),
+                revoked_at: None,
+                revoke_reason: None,
+                replaced_by_session_id: None,
+                client_instance_id: Some(
+                    Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+                ),
+                created_at: now.into(),
+            }]])
+            .append_exec_results([mock_exec_result()])
+            .into_connection();
+
+        let response = test_service(db.clone())
+            .authenticate_password(authenticate_request())
+            .await
+            .expect("authentication should succeed")
+            .into_inner();
+
+        assert_eq!(response.user_id, user.user_id.to_string());
+        assert!(!response.session_id.is_empty());
+        assert!(!response.access_token.is_empty());
+        assert!(!response.refresh_token.is_empty());
+        assert!(response.access_token_expires_at.is_some());
+        assert!(response.refresh_token_expires_at.is_some());
+        assert!(response.email_verified);
+        assert_eq!(
+            response.profile.as_ref().map(|p| p.username.as_str()),
+            Some("alice")
+        );
+
+        let statement_dump = db
+            .into_transaction_log()
+            .iter()
+            .flat_map(|transaction| transaction.statements().iter())
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(statement_dump.contains("email_normalized"));
+        assert!(statement_dump.contains("client_instance_id"));
+        assert!(statement_dump.contains("550e8400-e29b-41d4-a716-446655440000"));
+    }
+
+    #[tokio::test]
+    async fn authenticate_password_rejects_invalid_credentials() {
+        let now = Utc::now();
+        let user = mock_verified_user_account(now);
+        let password_hash = hash_password("different-password").expect("hashing should succeed");
+        let db = MockDatabase::new(DbBackend::Postgres)
+            .append_query_results([[user]])
+            .append_query_results([[user_credential_password::Model {
+                user_id: Uuid::new_v4(),
+                password_hash,
+                password_updated_at: now.into(),
+                failed_attempt_count: 0,
+                created_at: now.into(),
+                updated_at: now.into(),
+            }]])
+            .into_connection();
+
+        let error = test_service(db.clone())
+            .authenticate_password(authenticate_request())
+            .await
+            .expect_err("authentication should reject invalid password");
+
+        assert_eq!(error.code(), tonic::Code::Unauthenticated);
+        assert_eq!(error.message(), "invalid credentials");
+
+        let statement_dump = db
+            .into_transaction_log()
+            .iter()
+            .flat_map(|transaction| transaction.statements().iter())
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(!statement_dump.contains("INSERT INTO \"user_session\""));
     }
 }
