@@ -6,11 +6,13 @@ use relay_proto::identity::{
     RefreshSessionRequest, RegisterUserRequest, RegisterUserResponse,
     ResendVerificationEmailRequest, ResendVerificationEmailResponse, RevokeSessionRequest,
     RevokeSessionResponse, TokenPairResponse, UpdateUserProfileRequest, UpdateUserProfileResponse,
+    UserProfile,
 };
 use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter, Set, SqlErr,
     TransactionError, TransactionTrait,
 };
+use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 use tracing::error;
 use uuid::Uuid;
@@ -65,11 +67,6 @@ impl IdentityServer {
 
     pub fn into_server(self) -> IdentityServiceServer<Self> {
         IdentityServiceServer::new(self)
-    }
-
-    fn unimplemented<T>(&self, name: &'static str) -> Result<Response<T>, Status> {
-        let _ = (&self.connection, &self.auth);
-        Err(Status::unimplemented(name))
     }
 }
 
@@ -1041,16 +1038,95 @@ impl IdentityService for IdentityServer {
 
     async fn get_user_profile(
         &self,
-        _request: Request<GetUserProfileRequest>,
+        request: Request<GetUserProfileRequest>,
     ) -> Result<Response<GetUserProfileResponse>, Status> {
-        self.unimplemented("get_user_profile")
+        let actor_user_id = actor_user_id(&request)?;
+        let GetUserProfileRequest { user_id } = request.into_inner();
+        let user_id = match user_id {
+            Some(user_id) => Uuid::parse_str(&user_id)
+                .map_err(|_| Status::invalid_argument("invalid user_id"))?,
+            None => actor_user_id,
+        };
+
+        if user_id != actor_user_id {
+            return Err(Status::permission_denied(
+                "cross-user profile lookup is not allowed on this route",
+            ));
+        }
+
+        let profile = user_profile::Entity::find_by_id(user_id)
+            .one(&self.connection)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "identity get user profile lookup failed");
+                Status::internal("internal server error")
+            })?
+            .ok_or_else(|| Status::not_found("user profile not found"))?;
+
+        Ok(Response::new(GetUserProfileResponse {
+            user_id: profile.user_id.to_string(),
+            username: profile.username,
+            display_name: profile.display_name,
+            avatar_url: profile.avatar_url,
+        }))
     }
 
     async fn get_users_by_ids(
         &self,
-        _request: Request<GetUsersByIdsRequest>,
+        request: Request<GetUsersByIdsRequest>,
     ) -> Result<Response<GetUsersByIdsResponse>, Status> {
-        self.unimplemented("get_users_by_ids")
+        let GetUsersByIdsRequest { user_ids } = request.into_inner();
+        let parsed_user_ids = user_ids
+            .iter()
+            .map(|user_id| {
+                Uuid::parse_str(user_id)
+                    .map_err(|_| Status::invalid_argument(format!("invalid user_id: {}", user_id)))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let profiles = if parsed_user_ids.is_empty() {
+            Vec::new()
+        } else {
+            user_profile::Entity::find()
+                .filter(user_profile::Column::UserId.is_in(parsed_user_ids.clone()))
+                .all(&self.connection)
+                .await
+                .map_err(|e| {
+                    error!(error = %e, "identity get users by ids lookup failed");
+                    Status::internal("internal server error")
+                })?
+        };
+
+        let profiles_by_id = profiles
+            .into_iter()
+            .map(|profile| (profile.user_id, profile))
+            .collect::<HashMap<_, _>>();
+
+        let missing_ids = parsed_user_ids
+            .iter()
+            .filter(|user_id| !profiles_by_id.contains_key(user_id))
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+
+        if !missing_ids.is_empty() {
+            return Err(Status::not_found(format!(
+                "user profile not found for user_ids: {}",
+                missing_ids.join(", ")
+            )));
+        }
+
+        let users = parsed_user_ids
+            .into_iter()
+            .filter_map(|user_id| profiles_by_id.get(&user_id))
+            .map(|profile| UserProfile {
+                user_id: profile.user_id.to_string(),
+                username: profile.username.clone(),
+                display_name: profile.display_name.clone(),
+                avatar_url: profile.avatar_url.clone(),
+            })
+            .collect();
+
+        Ok(Response::new(GetUsersByIdsResponse { users }))
     }
 }
 
@@ -1138,6 +1214,33 @@ mod tests {
         }
 
         request
+    }
+
+    fn get_user_profile_request(
+        actor_user_id: Option<Uuid>,
+        user_id: Option<Uuid>,
+    ) -> Request<GetUserProfileRequest> {
+        let mut request = Request::new(GetUserProfileRequest {
+            user_id: user_id.map(|user_id| user_id.to_string()),
+        });
+
+        if let Some(actor_user_id) = actor_user_id {
+            request.metadata_mut().insert(
+                ACTOR_USER_ID_METADATA,
+                actor_user_id
+                    .to_string()
+                    .parse()
+                    .expect("user id metadata should be valid"),
+            );
+        }
+
+        request
+    }
+
+    fn get_users_by_ids_request(user_ids: &[Uuid]) -> Request<GetUsersByIdsRequest> {
+        Request::new(GetUsersByIdsRequest {
+            user_ids: user_ids.iter().map(ToString::to_string).collect(),
+        })
     }
 
     fn mock_user_account(now: chrono::DateTime<Utc>) -> user_account::Model {
@@ -1997,5 +2100,65 @@ mod tests {
         assert!(statement_dump.contains("UPDATE \"user_profile\""));
         assert!(statement_dump.contains("UserProfileUpdated"));
         assert!(statement_dump.contains("Alice Updated"));
+    }
+
+    #[tokio::test]
+    async fn get_user_profile_rejects_cross_user_lookup_on_actor_route() {
+        let actor_user_id = Uuid::new_v4();
+        let other_user_id = Uuid::new_v4();
+        let db = MockDatabase::new(DbBackend::Postgres).into_connection();
+
+        let error = test_service(db)
+            .get_user_profile(get_user_profile_request(
+                Some(actor_user_id),
+                Some(other_user_id),
+            ))
+            .await
+            .expect_err("cross-user profile lookup should be denied");
+
+        assert_eq!(error.code(), tonic::Code::PermissionDenied);
+        assert_eq!(
+            error.message(),
+            "cross-user profile lookup is not allowed on this route"
+        );
+    }
+
+    #[tokio::test]
+    async fn get_users_by_ids_returns_profiles_from_single_batch_lookup() {
+        let now = Utc::now();
+        let first = user_profile::Model {
+            user_id: Uuid::new_v4(),
+            username: "alice".to_string(),
+            display_name: "Alice".to_string(),
+            avatar_url: Some("https://cdn.example.com/alice.png".to_string()),
+            created_at: now.into(),
+            updated_at: now.into(),
+        };
+        let second = user_profile::Model {
+            user_id: Uuid::new_v4(),
+            username: "bob".to_string(),
+            display_name: "Bob".to_string(),
+            avatar_url: None,
+            created_at: now.into(),
+            updated_at: now.into(),
+        };
+        let db = MockDatabase::new(DbBackend::Postgres)
+            .append_query_results([[first.clone(), second.clone()]])
+            .into_connection();
+
+        let response = test_service(db.clone())
+            .get_users_by_ids(get_users_by_ids_request(&[first.user_id, second.user_id]))
+            .await
+            .expect("batched profile lookup should succeed")
+            .into_inner();
+
+        assert_eq!(response.users.len(), 2);
+        assert_eq!(response.users[0].user_id, first.user_id.to_string());
+        assert_eq!(response.users[0].username, "alice");
+        assert_eq!(response.users[1].user_id, second.user_id.to_string());
+        assert_eq!(response.users[1].username, "bob");
+
+        let transaction_log = db.into_transaction_log();
+        assert_eq!(transaction_log.len(), 1);
     }
 }

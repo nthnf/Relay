@@ -194,8 +194,6 @@ Identity exposes synchronous account, refresh-session, and profile-basic contrac
 **Response fields**
 
 - `user_id` (`uuid`)
-- `email` (`string`)
-- `email_verified` (`bool`)
 - `username` (`string`)
 - `display_name` (`string`)
 - `avatar_url` (`string optional`)
@@ -203,6 +201,7 @@ Identity exposes synchronous account, refresh-session, and profile-basic contrac
 **Contract notes**
 
 - Returns identity-owned profile basics for the authenticated actor when `user_id` is omitted, or for other owner-approved lookup paths when `user_id` is provided.
+- This method intentionally excludes account-contact and verification-state fields; callers that need those should use a future self-account contract instead of widening profile basics.
 - This is not a cross-domain aggregate query.
 
 ### `GetUsersByIds`
@@ -215,7 +214,7 @@ Identity exposes synchronous account, refresh-session, and profile-basic contrac
 
 **Response fields**
 
-- `users` (`repeated message`) with `user_id`, `username`, `display_name`, `avatar_url`, `email_verified`
+- `users` (`repeated message`) with `user_id`, `username`, `display_name`, `avatar_url`
 
 **Contract notes**
 

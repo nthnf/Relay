@@ -23,14 +23,6 @@ message UserProfile {
   optional string avatar_url = 4;
 }
 
-message UserProfileSummary {
-  string user_id = 1;
-  string username = 2;
-  string display_name = 3;
-  optional string avatar_url = 4;
-  bool email_verified = 5;
-}
-
 message RegisterUserRequest {
   string email = 1;
   string password = 2;
@@ -108,8 +100,6 @@ message GetUserProfileRequest {
 
 message GetUserProfileResponse {
   string user_id = 1;
-  string email = 2;
-  bool email_verified = 3;
   string username = 4;
   string display_name = 5;
   optional string avatar_url = 6;
@@ -120,5 +110,5 @@ message GetUsersByIdsRequest {
 }
 
 message GetUsersByIdsResponse {
-  repeated UserProfileSummary users = 1;
+  repeated UserProfile users = 1;
 }
