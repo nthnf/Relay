@@ -1,4 +1,4 @@
-/target
+target/
 
 # Local secrets and environment overrides
 .env
@@ -12,5 +12,4 @@
 .vscode/
 
 # Local tool output
-/graphify-out
-.graphify_detect.json
+graphify-out/
