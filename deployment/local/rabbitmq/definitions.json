@@ -1,0 +1,215 @@
+{
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "users": [],
+  "permissions": [],
+  "parameters": [],
+  "policies": [],
+  "queues": [
+    {
+      "name": "bootstrap.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "email.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "realtime.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "relay.events",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "bootstrap.events",
+      "destination_type": "queue",
+      "routing_key": "identity.UserRegistered",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "bootstrap.events",
+      "destination_type": "queue",
+      "routing_key": "identity.UserProfileUpdated",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "bootstrap.events",
+      "destination_type": "queue",
+      "routing_key": "friendship.FriendRequestAccepted",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "bootstrap.events",
+      "destination_type": "queue",
+      "routing_key": "friendship.FriendshipRemoved",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "bootstrap.events",
+      "destination_type": "queue",
+      "routing_key": "workspace.WorkspaceCreated",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "bootstrap.events",
+      "destination_type": "queue",
+      "routing_key": "workspace.WorkspaceMemberAdded",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "bootstrap.events",
+      "destination_type": "queue",
+      "routing_key": "workspace.WorkspaceMemberRemoved",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "bootstrap.events",
+      "destination_type": "queue",
+      "routing_key": "workspace.WorkspaceChannelCreated",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "bootstrap.events",
+      "destination_type": "queue",
+      "routing_key": "chat.MessageCreated",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "bootstrap.events",
+      "destination_type": "queue",
+      "routing_key": "chat.MessageEdited",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "bootstrap.events",
+      "destination_type": "queue",
+      "routing_key": "chat.MessageDeleted",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "email.events",
+      "destination_type": "queue",
+      "routing_key": "identity.VerificationEmailRequested",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "email.events",
+      "destination_type": "queue",
+      "routing_key": "workspace.WorkspaceInvitationIssued",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "realtime.events",
+      "destination_type": "queue",
+      "routing_key": "chat.MessageCreated",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "realtime.events",
+      "destination_type": "queue",
+      "routing_key": "chat.MessageEdited",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "realtime.events",
+      "destination_type": "queue",
+      "routing_key": "chat.MessageDeleted",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "realtime.events",
+      "destination_type": "queue",
+      "routing_key": "chat.MessageReactionAdded",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "realtime.events",
+      "destination_type": "queue",
+      "routing_key": "chat.MessageReactionRemoved",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "realtime.events",
+      "destination_type": "queue",
+      "routing_key": "workspace.WorkspaceMemberAdded",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "realtime.events",
+      "destination_type": "queue",
+      "routing_key": "workspace.WorkspaceMemberRemoved",
+      "arguments": {}
+    },
+    {
+      "source": "relay.events",
+      "vhost": "/",
+      "destination": "realtime.events",
+      "destination_type": "queue",
+      "routing_key": "workspace.WorkspaceChannelCreated",
+      "arguments": {}
+    }
+  ]
+}

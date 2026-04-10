@@ -43,6 +43,7 @@ chrono = "0.4.44"
 thiserror = "2.0.18"
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
+
 relay-proto = { path = "./crates/relay-proto" }
 relay-errors = { path = "./crates/relay-errors" }
 relay-config = { path = "./crates/relay-config" }
