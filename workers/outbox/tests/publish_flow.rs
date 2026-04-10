@@ -1,8 +1,11 @@
 use chrono::{Duration as ChronoDuration, Utc};
 use lapin::{
-    options::{BasicAckOptions, BasicGetOptions, ConfirmSelectOptions, QueueBindOptions, QueueDeclareOptions},
-    types::FieldTable,
     Connection, ConnectionProperties,
+    options::{
+        BasicAckOptions, BasicGetOptions, ConfirmSelectOptions, QueueBindOptions,
+        QueueDeclareOptions,
+    },
+    types::FieldTable,
 };
 use outbox::{config::Config, entity::outbox_event, worker};
 use sea_orm::{
@@ -16,7 +19,8 @@ use testcontainers_modules::{
 use uuid::Uuid;
 
 #[tokio::test]
-async fn publishes_pending_row_to_rabbitmq_and_marks_published() -> Result<(), Box<dyn std::error::Error>> {
+async fn publishes_pending_row_to_rabbitmq_and_marks_published()
+-> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
     let event_id = Uuid::new_v4();
     let user_id = Uuid::new_v4();
@@ -24,7 +28,13 @@ async fn publishes_pending_row_to_rabbitmq_and_marks_published() -> Result<(), B
     insert_outbox_row(&env.db, pending_row(event_id, user_id, "UserRegistered")).await?;
 
     worker::declare_exchange(&env.channel, &env.config.exchange).await?;
-    declare_test_queue(&env.channel, &env.config.exchange, &env.queue_name, "identity.UserRegistered").await?;
+    declare_test_queue(
+        &env.channel,
+        &env.config.exchange,
+        &env.queue_name,
+        "identity.UserRegistered",
+    )
+    .await?;
     worker::publish_batch_once(&env.db, &env.channel, &env.config).await?;
 
     let stored = outbox_event::Entity::find_by_id(event_id)
@@ -39,11 +49,15 @@ async fn publishes_pending_row_to_rabbitmq_and_marks_published() -> Result<(), B
         .basic_get(env.queue_name.as_str().into(), BasicGetOptions::default())
         .await?
         .expect("published message");
-    assert_eq!(String::from_utf8(delivery.data.clone())?, serde_json::json!({
-        "event_id": event_id,
-        "user_id": user_id,
-        "email": "nathan@example.com"
-    }).to_string());
+    assert_eq!(
+        String::from_utf8(delivery.data.clone())?,
+        serde_json::json!({
+            "event_id": event_id,
+            "user_id": user_id,
+            "email": "nathan@example.com"
+        })
+        .to_string()
+    );
     delivery.ack(BasicAckOptions::default()).await?;
 
     Ok(())
@@ -109,9 +123,8 @@ impl TestEnv {
         let rabbitmq_host = rabbitmq.get_host().await?;
         let rabbitmq_port = rabbitmq.get_host_port_ipv4(5672.tcp()).await?;
 
-        let database_url = format!(
-            "postgres://postgres:postgres@{postgres_host}:{postgres_port}/postgres"
-        );
+        let database_url =
+            format!("postgres://postgres:postgres@{postgres_host}:{postgres_port}/postgres");
         let amqp_addr = format!("amqp://{rabbitmq_host}:{rabbitmq_port}/%2f");
         let db = Database::connect(&database_url).await?;
 
@@ -200,7 +213,6 @@ fn pending_row(event_id: Uuid, user_id: Uuid, event_type: &str) -> outbox_event:
         published_at: Set(None),
         last_error: Set(None),
         created_at: Set(now.into()),
-        ..Default::default()
     }
 }
 
@@ -225,7 +237,6 @@ fn expired_claim_row(event_id: Uuid, user_id: Uuid, event_type: &str) -> outbox_
         published_at: Set(None),
         last_error: Set(Some("worker crashed".to_string())),
         created_at: Set((now - ChronoDuration::minutes(1)).into()),
-        ..Default::default()
     }
 }
 
