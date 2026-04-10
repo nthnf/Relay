@@ -66,7 +66,10 @@ pub fn verify_password(secret: &str, hash: &str) -> Result<bool, AuthError> {
 }
 
 pub fn hash_token(token: &str) -> String {
-    format!("{:x}", Sha256::digest(token.as_bytes()))
+    Sha256::digest(token.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 pub fn verify_token(token: &str, hash: &str) -> bool {
