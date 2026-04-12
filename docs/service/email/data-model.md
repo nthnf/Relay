@@ -10,7 +10,7 @@ One row per durable email intent accepted by the email service.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `outbound_email_id` | `uuid` | Primary key. Service-owned email send identifier. |
+| `id` | `uuid` | Primary key. Service-owned email send identifier. |
 | `dedupe_key` | `text` | Unique idempotency key derived from the consumed event and email purpose. Duplicate broker delivery must resolve to the same row. |
 | `email_kind` | `text` | Contract values: `registration_verification`, `workspace_invitation`. |
 | `recipient_user_id` | `uuid null` | Identity-owned user reference when the target user already exists. |
@@ -51,8 +51,8 @@ One row per provider handoff attempt for an `outbound_email` row.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `email_delivery_attempt_id` | `uuid` | Primary key. Service-owned attempt identifier. |
-| `outbound_email_id` | `uuid` | Foreign key to `outbound_email.outbound_email_id`. |
+| `id` | `uuid` | Primary key. Service-owned attempt identifier. |
+| `outbound_email_id` | `uuid` | Foreign key to `outbound_email.id`. |
 | `attempt_number` | `integer` | Monotonic count starting at `1` for the first provider submission attempt. |
 | `provider_name` | `text` | Provider used for this attempt. |
 | `provider_message_id` | `text null` | Provider-assigned message identifier when submission succeeds. |
@@ -73,7 +73,7 @@ Semantic rules:
 
 ## Relations
 
-- `email_delivery_attempt.outbound_email_id -> outbound_email.outbound_email_id` (1:many)
+- `email_delivery_attempt.outbound_email_id -> outbound_email.id` (1:many)
 
 ## Cross-Service References
 

@@ -9,6 +9,7 @@ members = [
   "services/bootstrap",
   "services/chat",
   "services/email",
+  "services/email/migration",
   "services/friendship",
   "services/identity",
   "services/identity/migration",
@@ -43,6 +44,7 @@ chrono = "0.4.44"
 thiserror = "2.0.18"
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
+dotenvy = "0.15.7"
 
 relay-proto = { path = "./crates/relay-proto" }
 relay-errors = { path = "./crates/relay-errors" }
