@@ -1,8 +1,16 @@
 use chrono::Utc;
-use email::{amqp::events::VerificationEmailRequested, amqp::handler::Handler, entity::{email_delivery_attempt, outbound_email}, smtp::SmtpClient};
+use email::{
+    amqp::handler::Handler,
+    entity::{email_delivery_attempt, outbound_email},
+    events::VerificationEmailRequested,
+    smtp::SmtpClient,
+};
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ActiveModelTrait, ColumnTrait, Database, EntityTrait, QueryFilter, Set};
-use testcontainers_modules::{postgres::Postgres, testcontainers::{core::IntoContainerPort, runners::AsyncRunner}};
+use testcontainers_modules::{
+    postgres::Postgres,
+    testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
+};
 use uuid::Uuid;
 
 #[tokio::test]
@@ -26,7 +34,7 @@ async fn duplicate_verification_email_is_ignored() -> Result<(), Box<dyn std::er
     );
 
     handler
-        .handle_email_event(email::amqp::events::EmailEvent::VerificationEmailRequested(
+        .handle_email_event(email::events::EmailEvent::VerificationEmailRequested(
             VerificationEmailRequested {
                 user_id: user_id.to_string(),
                 email: "nathan@example.com".to_string(),
@@ -45,9 +53,7 @@ async fn duplicate_verification_email_is_ignored() -> Result<(), Box<dyn std::er
         .await?;
     assert_eq!(rows.len(), 1);
 
-    let attempts = email_delivery_attempt::Entity::find()
-        .all(&env.db)
-        .await?;
+    let attempts = email_delivery_attempt::Entity::find().all(&env.db).await?;
     assert!(attempts.is_empty());
 
     env.shutdown().await;
@@ -64,7 +70,8 @@ impl TestEnv {
         let postgres = Postgres::default().start().await?;
         let postgres_host = postgres.get_host().await?;
         let postgres_port = postgres.get_host_port_ipv4(5432.tcp()).await?;
-        let database_url = format!("postgres://postgres:postgres@{postgres_host}:{postgres_port}/postgres");
+        let database_url =
+            format!("postgres://postgres:postgres@{postgres_host}:{postgres_port}/postgres");
 
         let db = Database::connect(&database_url).await?;
         Migrator::up(&db, None).await?;

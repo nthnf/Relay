@@ -1,5 +1,5 @@
-use crate::amqp::events::{EmailEvent, VerificationEmailRequested, WorkspaceInvitationIssued};
 use crate::entity::{email_delivery_attempt, outbound_email};
+use crate::events::{EmailEvent, VerificationEmailRequested, WorkspaceInvitationIssued};
 use crate::smtp::{SmtpClient, SmtpError};
 use chrono::{DateTime, Utc};
 use lapin::message::Delivery;

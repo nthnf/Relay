@@ -1,12 +1,10 @@
 use identity::{
     auth::AuthKeys,
     entity::{outbox_event, user_account, user_profile},
-    grpc::identity::IdentityServer,
+    grpc::IdentityServer,
 };
 use migration::{Migrator, MigratorTrait};
-use relay_proto::identity::{
-    identity_service_client::IdentityServiceClient, RegisterUserRequest,
-};
+use relay_proto::identity::{RegisterUserRequest, identity_service_client::IdentityServiceClient};
 use sea_orm::{ColumnTrait, Database, EntityTrait, QueryFilter};
 use testcontainers_modules::{
     postgres::Postgres,
@@ -15,8 +13,8 @@ use testcontainers_modules::{
 use tonic::transport::Server;
 
 #[tokio::test]
-async fn register_user_persists_identity_state_and_outbox_events(
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn register_user_persists_identity_state_and_outbox_events()
+-> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
 
     let response = env
@@ -56,10 +54,16 @@ async fn register_user_persists_identity_state_and_outbox_events(
         .all(&env.db)
         .await?;
     assert_eq!(outbox_rows.len(), 2);
-    assert!(outbox_rows.iter().any(|row| row.event_type == "UserRegistered"));
-    assert!(outbox_rows
-        .iter()
-        .any(|row| row.event_type == "VerificationEmailRequested"));
+    assert!(
+        outbox_rows
+            .iter()
+            .any(|row| row.event_type == "UserRegistered")
+    );
+    assert!(
+        outbox_rows
+            .iter()
+            .any(|row| row.event_type == "VerificationEmailRequested")
+    );
 
     env.shutdown().await;
     Ok(())
@@ -78,9 +82,8 @@ impl TestEnv {
         let postgres = Postgres::default().start().await?;
         let postgres_host = postgres.get_host().await?;
         let postgres_port = postgres.get_host_port_ipv4(5432.tcp()).await?;
-        let database_url = format!(
-            "postgres://postgres:postgres@{postgres_host}:{postgres_port}/postgres"
-        );
+        let database_url =
+            format!("postgres://postgres:postgres@{postgres_host}:{postgres_port}/postgres");
 
         let db = Database::connect(&database_url).await?;
         Migrator::up(&db, None).await?;
@@ -89,10 +92,8 @@ impl TestEnv {
         let addr = listener.local_addr()?;
         drop(listener);
 
-        let service = IdentityServer::new(
-            db.clone(),
-            AuthKeys::from_shared_secret(b"test-secret-key"),
-        );
+        let service =
+            IdentityServer::new(db.clone(), AuthKeys::from_shared_secret(b"test-secret-key"));
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
         let server_task = tokio::spawn(async move {

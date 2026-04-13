@@ -1,14 +1,16 @@
-pub mod events;
 pub mod handler;
 
 use crate::amqp::handler::{HandleError, Handler};
 use lapin::message::DeliveryResult;
 use lapin::options::{BasicAckOptions, BasicNackOptions, BasicQosOptions, BasicRejectOptions};
 use lapin::{Connection, ConnectionProperties, options::BasicConsumeOptions, types::FieldTable};
-use tracing::{error, info, warn};
 use std::sync::Arc;
+use tracing::{error, info, warn};
 
-pub async fn run(handler: Arc<Handler>, amqp_addr: String) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run(
+    handler: Arc<Handler>,
+    amqp_addr: String,
+) -> Result<(), Box<dyn std::error::Error>> {
     let amqp = Connection::connect(&amqp_addr, ConnectionProperties::default()).await?;
     let channel = amqp.create_channel().await?;
 
