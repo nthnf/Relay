@@ -1874,6 +1874,32 @@ dependencies = [
 [[package]]
 name = "friendship"
 version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dotenvy",
+ "friendship-migration",
+ "prost",
+ "prost-types",
+ "relay-proto",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "testcontainers-modules",
+ "thiserror",
+ "tokio",
+ "tonic",
+ "tonic-prost",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "friendship-migration"
+version = "0.1.0"
+dependencies = [
+ "sea-orm-migration",
+ "tokio",
+]
 
 [[package]]
 name = "fs_extra"
@@ -2575,7 +2601,6 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-prost",
- "tonic-prost-build",
  "tracing",
  "uuid",
 ]
@@ -3290,6 +3315,7 @@ dependencies = [
  "chrono",
  "lapin",
  "sea-orm",
+ "serde",
  "serde_json",
  "testcontainers-modules",
  "tokio",

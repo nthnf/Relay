@@ -10,8 +10,9 @@ lapin = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 chrono = { workspace = true }
-serde_json = "1.0"
 uuid = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 testcontainers-modules = { version = "0.15", features = [
