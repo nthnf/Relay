@@ -400,10 +400,10 @@ impl Handler {
                 return message_id.to_string();
             }
 
-            if let Some(headers) = delivery.properties.headers().as_ref() {
-                if let Some(value) = header_string(headers, "event_id") {
-                    return value;
-                }
+            if let Some(headers) = delivery.properties.headers().as_ref()
+                && let Some(value) = header_string(headers, "event_id")
+            {
+                return value;
             }
         }
 

@@ -11,7 +11,7 @@ use crate::entity::{user_account, user_profile, user_session};
 use super::handler::{Handler, to_timestamp};
 
 impl Handler {
-    pub(crate) async fn refresh_session(
+    pub(super) async fn refresh_session(
         &self,
         request: Request<RefreshSessionRequest>,
     ) -> Result<Response<TokenPairResponse>, Status> {

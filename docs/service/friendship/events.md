@@ -92,6 +92,11 @@ Friendship publishes integration events by inserting service-owned rows into `ou
 - `removed_at`
 - `reason` with contract values such as `removed_by_user` or `blocked`
 
+**Outbox keying**
+
+- `aggregate_type = friendship`
+- `aggregate_id = authenticated actor_user_id` for v1
+
 **Typical consumers**
 
 - `bootstrap` friend projections

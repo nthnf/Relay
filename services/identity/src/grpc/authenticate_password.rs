@@ -11,7 +11,7 @@ use crate::entity::{user_account, user_profile, user_credential_password, user_s
 use super::handler::{Handler, to_timestamp};
 
 impl Handler {
-    pub(crate) async fn authenticate_password(
+    pub(super) async fn authenticate_password(
         &self,
         request: Request<AuthenticatePasswordRequest>,
     ) -> Result<Response<TokenPairResponse>, Status> {

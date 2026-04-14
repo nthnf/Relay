@@ -12,7 +12,7 @@ use crate::event::UserEmailVerifiedPayload;
 use super::handler::{Handler, payload_value, to_timestamp};
 
 impl Handler {
-    pub(crate) async fn redeem_email_verification_token(
+    pub(super) async fn redeem_email_verification_token(
         &self,
         request: Request<RedeemEmailVerificationTokenRequest>,
     ) -> Result<Response<TokenPairResponse>, Status> {

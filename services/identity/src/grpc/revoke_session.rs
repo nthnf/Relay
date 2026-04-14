@@ -11,7 +11,7 @@ use crate::event::SessionRevokedPayload;
 use super::handler::{Handler, payload_value, to_timestamp};
 
 impl Handler {
-    pub(crate) async fn revoke_session(
+    pub(super) async fn revoke_session(
         &self,
         request: Request<RevokeSessionRequest>,
     ) -> Result<Response<RevokeSessionResponse>, Status> {

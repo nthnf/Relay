@@ -9,7 +9,7 @@ use crate::entity::user_profile;
 use super::handler::{Handler, actor_user_id};
 
 impl Handler {
-    pub(crate) async fn get_user_profile(
+    pub(super) async fn get_user_profile(
         &self,
         request: Request<GetUserProfileRequest>,
     ) -> Result<Response<GetUserProfileResponse>, Status> {

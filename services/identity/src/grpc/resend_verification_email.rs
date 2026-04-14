@@ -11,7 +11,7 @@ use crate::event::VerificationEmailRequestedPayload;
 use super::handler::{Handler, payload_value};
 
 impl Handler {
-    pub(crate) async fn resend_verification_email(
+    pub(super) async fn resend_verification_email(
         &self,
         request: Request<ResendVerificationEmailRequest>,
     ) -> Result<Response<ResendVerificationEmailResponse>, Status> {

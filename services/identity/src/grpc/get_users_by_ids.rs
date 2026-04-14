@@ -11,7 +11,7 @@ use crate::entity::user_profile;
 use super::handler::Handler;
 
 impl Handler {
-    pub(crate) async fn get_users_by_ids(
+    pub(super) async fn get_users_by_ids(
         &self,
         request: Request<GetUsersByIdsRequest>,
     ) -> Result<Response<GetUsersByIdsResponse>, Status> {

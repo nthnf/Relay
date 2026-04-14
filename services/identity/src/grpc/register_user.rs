@@ -18,7 +18,7 @@ use super::handler::{
 };
 
 impl Handler {
-    pub(crate) async fn register_user(
+    pub(super) async fn register_user(
         &self,
         request: Request<RegisterUserRequest>,
     ) -> Result<Response<RegisterUserResponse>, Status> {

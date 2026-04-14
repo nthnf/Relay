@@ -97,6 +97,7 @@ Friendship exposes synchronous relationship command and bounded read contracts. 
 - Remove both directional `friendship_edge` rows.
 - This method is idempotent: if no active friendship exists, return `removed = false`.
 - Successful removal inserts a `FriendshipRemoved` outbox row.
+- v1 outbox keying uses `aggregate_type = friendship` and `aggregate_id = authenticated actor_user_id`.
 
 ### `BlockUser`
 

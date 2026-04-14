@@ -11,7 +11,7 @@ use crate::event::UserProfileUpdatedPayload;
 use super::handler::{Handler, actor_user_id, payload_value, to_timestamp};
 
 impl Handler {
-    pub(crate) async fn update_user_profile(
+    pub(super) async fn update_user_profile(
         &self,
         request: Request<UpdateUserProfileRequest>,
     ) -> Result<Response<UpdateUserProfileResponse>, Status> {

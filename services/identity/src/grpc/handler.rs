@@ -41,8 +41,8 @@ pub(super) fn actor_user_id<T>(request: &Request<T>) -> Result<Uuid, Status> {
 }
 
 pub struct Handler {
-    pub(crate) connection: DatabaseConnection,
-    pub(crate) auth: AuthKeys,
+    pub(super) connection: DatabaseConnection,
+    pub(super) auth: AuthKeys,
 }
 
 impl Handler {
