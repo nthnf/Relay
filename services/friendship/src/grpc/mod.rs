@@ -2,7 +2,6 @@ pub mod lib;
 
 pub mod accept_friend_request;
 pub mod block_user;
-pub mod client;
 pub mod create_friend_request;
 pub mod handler;
 pub mod list_friends;

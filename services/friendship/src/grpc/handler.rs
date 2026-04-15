@@ -4,20 +4,14 @@ use relay_proto::friendship::friendship_service_server::{
 use sea_orm::DatabaseConnection;
 use tonic::{Request, Status};
 
-use super::client::IdentityClient;
-
 #[derive(Clone)]
 pub struct Handler {
     pub(crate) connection: DatabaseConnection,
-    pub(crate) identity: IdentityClient,
 }
 
 impl Handler {
-    pub fn new(connection: DatabaseConnection, identity: IdentityClient) -> Self {
-        Self {
-            connection,
-            identity,
-        }
+    pub fn new(connection: DatabaseConnection) -> Self {
+        Self { connection }
     }
 
     pub fn into_server(self) -> FriendshipServiceServer<Self> {

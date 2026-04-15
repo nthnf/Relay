@@ -3,4 +3,5 @@
 pub use super::friend_request::Entity as FriendRequest;
 pub use super::friendship_edge::Entity as FriendshipEdge;
 pub use super::outbox_event::Entity as OutboxEvent;
+pub use super::user_account::Entity as UserAccount;
 pub use super::user_block::Entity as UserBlock;

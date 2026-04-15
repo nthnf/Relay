@@ -1,4 +1,4 @@
-use email::{amqp, config::Config, db, smtp::SmtpClient};
+use email::{amqp::handler::Handler, config::Config, db, smtp::SmtpClient};
 use std::sync::Arc;
 
 #[tokio::main]
@@ -10,12 +10,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.sender_email.clone(),
         config.sender_name.clone(),
     );
-    let handler = amqp::handler::Handler::new(
+    let handler = Handler::new(
         db,
         config.public_web_base_url.clone(),
         config.smtp_provider_name.clone(),
         smtp,
     );
 
-    amqp::run(Arc::new(handler), config.amqp_addr.clone()).await
+    Arc::new(handler).run(config.amqp_addr.clone()).await
 }

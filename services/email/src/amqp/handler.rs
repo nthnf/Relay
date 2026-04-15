@@ -9,6 +9,7 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
     Set,
 };
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -59,6 +60,10 @@ impl Handler {
 
     pub async fn handle_email_event(&self, event: EmailEvent) -> Result<(), HandleError> {
         self.handle_event(event).await
+    }
+
+    pub async fn run(self: Arc<Self>, amqp_addr: String) -> Result<(), Box<dyn std::error::Error>> {
+        crate::amqp::run(self, amqp_addr).await
     }
 
     async fn handle_event(&self, event: EmailEvent) -> Result<(), HandleError> {

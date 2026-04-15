@@ -9,7 +9,7 @@ prost = { workspace = true }
 prost-types = { workspace = true }
 tonic-prost = { workspace = true }
 sea-orm = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
 uuid = { workspace = true }
 chrono = { workspace = true }
 relay-proto = { workspace = true }
@@ -18,8 +18,9 @@ thiserror = { workspace = true }
 dotenvy = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+lapin = { workspace = true }
 
 [dev-dependencies]
 migration = { path = "migration", package = "friendship-migration" }
-testcontainers-modules = { version = "0.15", features = ["postgres"] }
+testcontainers-modules = { version = "0.15", features = ["postgres", "rabbitmq"] }
 tracing-subscriber = { workspace = true }

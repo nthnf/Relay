@@ -37,7 +37,7 @@ async fn duplicate_verification_email_is_ignored() -> Result<(), Box<dyn std::er
         .handle_email_event(email::events::EmailEvent::VerificationEmailRequested(
             VerificationEmailRequested {
                 user_id: user_id.to_string(),
-                email: "nathan@example.com".to_string(),
+                email: "user1@example.com".to_string(),
                 verification_token: "token-123".to_string(),
                 verification_token_id,
                 verification_token_expires_at: Utc::now().to_rfc3339(),
@@ -95,7 +95,7 @@ async fn seed_outbound_email(
         dedupe_key: Set(dedupe_key.to_string()),
         email_kind: Set("registration_verification".to_string()),
         recipient_user_id: Set(Some(Uuid::new_v4())),
-        recipient_email: Set("nathan@example.com".to_string()),
+        recipient_email: Set("user1@example.com".to_string()),
         provider_message_id: Set(None),
         provider_name: Set(Some("smtp".to_string())),
         template_key: Set("verify-email-v1".to_string()),

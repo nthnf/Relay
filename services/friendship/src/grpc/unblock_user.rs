@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::handler::Handler;
-use super::lib::{actor_user_id, payload_value, to_timestamp};
+use super::lib::{actor_user_id, payload_value, to_timestamp, user_account_exists};
 
 impl Handler {
     pub(super) async fn unblock_user(
@@ -28,11 +28,7 @@ impl Handler {
             return Err(Status::invalid_argument("Cannot unblock yourself"));
         }
 
-        if !self
-            .identity
-            .user_exists(actor_user_id, target_user_id)
-            .await?
-        {
+        if !user_account_exists(&self.connection, target_user_id).await? {
             return Err(Status::not_found("User not found"));
         }
 

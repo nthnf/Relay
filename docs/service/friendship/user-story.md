@@ -2,11 +2,11 @@
 
 ## Send a friend request to another user
 
-As an authenticated user, I can send a friend request to another existing user when we are not already friends, there is no active block in either direction, and there is no existing pending request for the pair, so the system records one durable pending relationship request without creating orphaned relationship rows.
+As an authenticated user, I can send a friend request to another existing user when we are not already friends, there is no active block in either direction, and there is no existing pending request for the pair, so system records one durable pending relationship request without creating orphaned relationship rows.
 
 ## Accept or reject a pending incoming request
 
-As a user with an incoming pending request, I can accept it to create a mutual friendship or reject it to close the request, and the service publishes the corresponding durable event for downstream consumers such as `bootstrap`.
+As a user with incoming pending request, I can accept it to create mutual friendship or reject it to close request, and service publishes corresponding durable event for downstream consumers such as `bootstrap`.
 
 ## Remove an existing friend relationship
 

@@ -5,4 +5,5 @@ pub mod prelude;
 pub mod friend_request;
 pub mod friendship_edge;
 pub mod outbox_event;
+pub mod user_account;
 pub mod user_block;

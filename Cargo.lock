@@ -1878,6 +1878,7 @@ dependencies = [
  "chrono",
  "dotenvy",
  "friendship-migration",
+ "lapin",
  "prost",
  "prost-types",
  "relay-proto",

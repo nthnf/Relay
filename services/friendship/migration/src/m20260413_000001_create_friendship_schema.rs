@@ -9,6 +9,27 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
+                    .table(UserAccount::Table)
+                    .if_not_exists()
+                    .col(uuid(UserAccount::UserId).not_null().primary_key())
+                    .col(boolean(UserAccount::EmailVerified).not_null())
+                    .col(
+                        timestamp_with_time_zone(UserAccount::CreatedAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .col(
+                        timestamp_with_time_zone(UserAccount::UpdatedAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
                     .table(FriendRequest::Table)
                     .if_not_exists()
                     .col(
@@ -224,6 +245,9 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
+            .drop_table(Table::drop().table(UserAccount::Table).to_owned())
+            .await?;
+        manager
             .drop_table(Table::drop().table(OutboxEvent::Table).to_owned())
             .await?;
         manager
@@ -250,6 +274,15 @@ enum FriendRequest {
     CreatedAt,
     ResolvedAt,
     ResolutionReason,
+}
+
+#[derive(DeriveIden)]
+enum UserAccount {
+    Table,
+    UserId,
+    EmailVerified,
+    CreatedAt,
+    UpdatedAt,
 }
 
 #[derive(DeriveIden)]

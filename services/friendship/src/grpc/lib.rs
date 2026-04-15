@@ -1,5 +1,8 @@
+use sea_orm::{ConnectionTrait, EntityTrait};
 use tonic::{Request, Status};
 use uuid::Uuid;
+
+use crate::entity::user_account;
 
 use super::ACTOR_USER_ID_METADATA;
 
@@ -25,6 +28,21 @@ pub(super) fn to_timestamp(dt: chrono::DateTime<chrono::Utc>) -> prost_types::Ti
         seconds: dt.timestamp(),
         nanos: dt.timestamp_subsec_nanos() as i32,
     }
+}
+
+pub(super) async fn user_account_exists<C>(db: &C, user_id: Uuid) -> Result<bool, Status>
+where
+    C: ConnectionTrait,
+{
+    let account = user_account::Entity::find_by_id(user_id)
+        .one(db)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "friendship user account lookup failed");
+            Status::internal("Internal Server Error")
+        })?;
+
+    Ok(account.is_some())
 }
 
 #[cfg(test)]

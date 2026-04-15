@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::handler::Handler;
-use super::lib::{actor_user_id, payload_value, to_timestamp};
+use super::lib::{actor_user_id, payload_value, to_timestamp, user_account_exists};
 
 impl Handler {
     pub(super) async fn create_friend_request(
@@ -27,8 +27,7 @@ impl Handler {
             return Err(Status::invalid_argument("Cannot friend yourself"));
         }
 
-        // Check if user exists
-        if !self.identity.user_exists(actor_user_id, user_id).await? {
+        if !user_account_exists(&self.connection, user_id).await? {
             return Err(Status::not_found("User not found"));
         }
 

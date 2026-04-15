@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
 pub struct FriendshipPairPayload {
@@ -61,4 +61,22 @@ pub struct UserUnblockedPayload {
     pub blocker_user_id: String,
     pub blocked_user_id: String,
     pub unblocked_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct UserRegisteredPayload {
+    pub user_id: String,
+    pub email: String,
+    pub email_verified: bool,
+    pub username: String,
+    pub display_name: String,
+    pub avatar_url: Option<String>,
+    pub registered_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct UserEmailVerifiedPayload {
+    pub user_id: String,
+    pub email: String,
+    pub email_verified_at: String,
 }

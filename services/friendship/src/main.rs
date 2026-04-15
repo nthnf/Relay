@@ -1,21 +1,27 @@
-use friendship::{
-    config::Config,
-    db,
-    grpc::{FriendshipServer, client::IdentityClient},
-};
+use friendship::{amqp, config::Config, db, grpc::FriendshipServer};
+use std::sync::Arc;
 use tonic::transport::Server;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = Config::from_env()?;
     let db = db::connect(&config.db_url).await?;
-    let identity = IdentityClient::connect(&config.identity_url).await?;
-    let service = FriendshipServer::new(db, identity);
+    let grpc = async {
+        Server::builder()
+            .add_service(FriendshipServer::new(db.clone()).into_server())
+            .serve_with_shutdown(config.bind_addr, async {
+                let _ = tokio::signal::ctrl_c().await;
+            })
+            .await
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
+    };
 
-    Server::builder()
-        .add_service(service.into_server())
-        .serve(config.bind_addr)
-        .await?;
+    let amqp = amqp::run(
+        Arc::new(amqp::AmqpHandler::new(db.clone())),
+        config.amqp_addr.clone(),
+    );
+
+    tokio::try_join!(grpc, amqp)?;
 
     Ok(())
 }

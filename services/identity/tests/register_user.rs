@@ -21,33 +21,33 @@ async fn register_user_persists_identity_state_and_outbox_events()
         .client
         .clone()
         .register_user(RegisterUserRequest {
-            email: "nathan@example.com".to_string(),
+            email: "user1@example.com".to_string(),
             password: "correct horse battery staple".to_string(),
-            username: "nathan".to_string(),
-            display_name: "Nathan".to_string(),
+            username: "user1".to_string(),
+            display_name: "User One".to_string(),
             avatar_url: Some("https://example.com/avatar.png".to_string()),
         })
         .await?
         .into_inner();
 
-    assert_eq!(response.email, "nathan@example.com");
+    assert_eq!(response.email, "user1@example.com");
     assert!(!response.user_id.is_empty());
     assert!(response.verification_email_requested_at.is_some());
 
     let account = user_account::Entity::find()
-        .filter(user_account::Column::EmailNormalized.eq("nathan@example.com"))
+        .filter(user_account::Column::EmailNormalized.eq("user1@example.com"))
         .one(&env.db)
         .await?
         .expect("user account row");
-    assert_eq!(account.email, "nathan@example.com");
+    assert_eq!(account.email, "user1@example.com");
     assert_eq!(account.user_id.to_string(), response.user_id);
 
     let profile = user_profile::Entity::find_by_id(account.user_id)
         .one(&env.db)
         .await?
         .expect("user profile row");
-    assert_eq!(profile.username, "nathan");
-    assert_eq!(profile.display_name, "Nathan");
+    assert_eq!(profile.username, "user1");
+    assert_eq!(profile.display_name, "User One");
 
     let outbox_rows = outbox_event::Entity::find()
         .filter(outbox_event::Column::AggregateId.eq(account.user_id))

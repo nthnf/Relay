@@ -54,7 +54,7 @@ async fn publishes_pending_row_to_rabbitmq_and_marks_published()
         serde_json::json!({
             "event_id": event_id,
             "user_id": user_id,
-            "email": "nathan@example.com"
+            "email": "user1@example.com"
         })
         .to_string()
     );
@@ -202,7 +202,7 @@ fn pending_row(event_id: Uuid, user_id: Uuid, event_type: &str) -> outbox_event:
         payload: Set(serde_json::json!({
             "event_id": event_id,
             "user_id": user_id,
-            "email": "nathan@example.com"
+            "email": "user1@example.com"
         })),
         status: Set("pending".to_string()),
         publish_attempts: Set(0),
@@ -226,7 +226,7 @@ fn expired_claim_row(event_id: Uuid, user_id: Uuid, event_type: &str) -> outbox_
         payload: Set(serde_json::json!({
             "event_id": event_id,
             "user_id": user_id,
-            "email": "nathan@example.com"
+            "email": "user1@example.com"
         })),
         status: Set("claimed".to_string()),
         publish_attempts: Set(3),
