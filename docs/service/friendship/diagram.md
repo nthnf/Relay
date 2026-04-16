@@ -30,8 +30,8 @@ flowchart LR
 
 Notes:
 
-- Envoy Gateway owns backend ingress policy; friendship owns relationship state, invariants, and service-boundary authorization.
-- Friendship reads local `user_account` mirror for target validation.
+- Envoy Gateway owns backend ingress policy; protected routes call identity `Authorization/Check`, then friendship reads trusted actor headers such as `x-user-id`.
+- Friendship reads local `user_account` mirror for target validation only.
 - Friendship writes domain rows and `outbox_event` rows in same local Postgres transaction.
 - RabbitMQ publication is asynchronous durable path that keeps `user_account` mirror converged and lets `bootstrap` converge accepted-friend projections.
 - V1 bootstrap scope here is accepted-friend projection maintenance only; pending-request and block state remain friendship-owned and are not projected by bootstrap.

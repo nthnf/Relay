@@ -5,52 +5,23 @@ package relay.realtime;
 import "google/protobuf/timestamp.proto";
 
 service RealtimeService {
-  rpc PublishChannelMessage(PublishChannelMessageRequest) returns (PublishRealtimeResponse);
-  rpc PublishDirectMessage(PublishDirectMessageRequest) returns (PublishRealtimeResponse);
-  rpc PushWorkspaceEvent(PushWorkspaceEventRequest) returns (PushWorkspaceEventResponse);
+  rpc PublishEvent(PublishEventRequest) returns (PublishEventResponse);
   rpc DisconnectActorSessions(DisconnectActorSessionsRequest) returns (DisconnectActorSessionsResponse);
 }
 
-message PublishChannelMessageRequest {
+message PublishEventRequest {
   string event_id = 1;
-  string message_id = 2;
-  string workspace_id = 3;
-  string channel_id = 4;
-  string author_user_id = 5;
-  int64 target_message_seq = 6;
-  string body = 7;
-  google.protobuf.Timestamp created_at = 8;
+  string event_type = 2;
+  string target_kind = 3;
+  string target_id = 4;
+  bytes payload = 5;
+  google.protobuf.Timestamp occurred_at = 6;
 }
 
-message PublishDirectMessageRequest {
-  string event_id = 1;
-  string message_id = 2;
-  string direct_conversation_id = 3;
-  string author_user_id = 4;
-  repeated string participant_user_ids = 5;
-  int64 target_message_seq = 6;
-  string body = 7;
-  google.protobuf.Timestamp created_at = 8;
-}
-
-message PublishRealtimeResponse {
+message PublishEventResponse {
   bool accepted = 1;
   int32 attempted_recipient_count = 2;
   int32 delivered_session_count = 3;
-}
-
-message PushWorkspaceEventRequest {
-  string event_type = 1;
-  string workspace_id = 2;
-  optional string channel_id = 3;
-  optional string user_id = 4;
-  google.protobuf.Timestamp occurred_at = 5;
-  bytes payload = 6;
-}
-
-message PushWorkspaceEventResponse {
-  bool accepted = 1;
-  int32 affected_session_count = 2;
 }
 
 message DisconnectActorSessionsRequest {

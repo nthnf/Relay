@@ -22,5 +22,5 @@ lapin = { workspace = true }
 
 [dev-dependencies]
 migration = { path = "migration", package = "friendship-migration" }
-testcontainers-modules = { version = "0.15", features = ["postgres", "rabbitmq"] }
+testcontainers-modules = { version = "0.15", features = ["postgres"] }
 tracing-subscriber = { workspace = true }

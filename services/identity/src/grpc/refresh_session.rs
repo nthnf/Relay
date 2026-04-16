@@ -1,6 +1,8 @@
 use chrono::{Duration, Utc};
 use relay_proto::identity::{RefreshSessionRequest, TokenPairResponse};
-use sea_orm::{ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set, TransactionError, TransactionTrait};
+use sea_orm::{
+    ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set, TransactionError, TransactionTrait,
+};
 use tonic::{Request, Response, Status};
 use tracing::error;
 use uuid::Uuid;

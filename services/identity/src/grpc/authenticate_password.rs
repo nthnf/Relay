@@ -6,7 +6,7 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::auth::{ACCESS_TOKEN_VALIDITY, hash_token, verify_password};
-use crate::entity::{user_account, user_profile, user_credential_password, user_session};
+use crate::entity::{user_account, user_credential_password, user_profile, user_session};
 
 use super::handler::{Handler, to_timestamp};
 

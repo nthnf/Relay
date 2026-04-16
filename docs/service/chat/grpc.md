@@ -5,11 +5,12 @@ Chat exposes hot-path message-write commands, bounded channel and direct-message
 ## Shared Contract Rules
 
 - Authenticated actor identity is derived from Envoy-validated access-token context and must still be authorized by the chat service boundary; callers must not mutate another actor's message state by supplying arbitrary user IDs.
+- Envoy calls identity `Authorization/Check` on protected routes, then forwards trusted actor headers such as `x-user-id` and `x-session-id` out-of-band.
 - External application callers do not supply actor identity in request payloads for end-user actions; the transport boundary or a trusted backend caller context attaches it out-of-band.
 - Chat enforces chat-local invariants and must validate channel access against `workspace` before accepting workspace-channel writes or history reads.
 - Chat authorizes direct-message writes and reads through `direct_conversation_member` rows it owns.
 - Domain writes and matching `outbox_event` inserts happen in the same transaction.
-- Chat remains the durable message-write authority; synchronous `realtime` notify calls for message-create fanout happen only after durable write success.
+- Chat remains the durable message-write authority; synchronous `realtime.PublishEvent` calls for message-create fanout happen only after durable write success.
 - A `realtime` notify failure must not roll back an already committed message-create write.
 - V1 direct messages are 1:1 only; group DMs are not defined here.
 
@@ -47,7 +48,7 @@ Chat exposes hot-path message-write commands, bounded channel and direct-message
 - Store `client_message_id` on `chat_message` when supplied.
 - On duplicate retry for an existing durable message with the same idempotency key, return the original message response and do not create another row.
 - Duplicate retry must not publish another `MessageCreated` event.
-- After the transaction commits successfully, synchronously call `realtime` as a downstream side effect for low-latency fanout.
+- After the transaction commits successfully, synchronously call `realtime.PublishEvent` as a downstream side effect for low-latency fanout.
 - The synchronous callout is best-effort: chat returns durable write success even if the post-commit notify fails, with RabbitMQ plus `outbox_event` remaining the recovery path.
 
 ### `EditMessage`

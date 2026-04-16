@@ -20,8 +20,8 @@ members = [
 ]
 
 [workspace.dependencies]
-tokio = { version = "1.51.0", features = ["macros", "rt-multi-thread"] }
-sea-orm = { version = "2.0.0-rc", features = [
+tokio = { version = "1.52.0", features = ["full"] }
+sea-orm = { version = "2.0.0-rc.38", features = [
   "sqlx-postgres",
   "runtime-tokio-rustls",
   "macros",
@@ -30,7 +30,7 @@ sea-orm = { version = "2.0.0-rc", features = [
   "debug-print",
   "mock",
 ] }
-sea-orm-migration = { version = "2.0.0-rc", features = [
+sea-orm-migration = { version = "2.0.0-rc.38", features = [
   "sqlx-postgres",
   "runtime-tokio-rustls",
 ] }
@@ -38,7 +38,7 @@ tonic = "0.14.5"
 tonic-prost = "0.14.5"
 tonic-prost-build = "0.14.5"
 prost = "0.14.3"
-prost-types = "0.14.1"
+prost-types = "0.14.3"
 uuid = { version = "1.23.0", features = ["v4"] }
 lapin = "4.4.0"
 chrono = "0.4.44"

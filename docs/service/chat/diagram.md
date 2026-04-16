@@ -25,8 +25,7 @@ flowchart LR
     Chat -->|write reaction state| CMR
     Chat -->|same transaction inserts event row| O
 
-    Chat -->|post-commit channel fanout| Realtime[realtime]
-    Chat -->|post-commit direct-message fanout| Realtime
+    Chat -->|post-commit PublishEvent| Realtime[realtime]
 
     O --> Worker[outbox worker sidecar]
     Worker -->|publish durable chat events| RabbitMQ[RabbitMQ]
@@ -42,6 +41,6 @@ Notes:
 - Workspace-channel writes and reads depend on workspace-owned membership and channel validation before chat accepts them.
 - Chat also owns direct-message conversation metadata and participant membership used to authorize DM reads and writes.
 - Chat writes domain rows and `outbox_event` rows in the same local Postgres transaction.
-- Channel message fanout and direct-message fanout both call `realtime` only after durable write success and remain best-effort for latency.
+- Channel message fanout and direct-message fanout both call `realtime.PublishEvent` only after durable write success and remain best-effort for latency.
 - RabbitMQ publication is the durable path for downstream convergence, replay, and recovery when synchronous fanout is unavailable.
 - `workspace` is shown as a contract dependency for validation only; chat still owns message persistence and never writes workspace data.

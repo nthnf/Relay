@@ -145,7 +145,7 @@ Semantic rules:
 - `identity` owns `author_user_id`, `created_by_user_id`, `editor_user_id`, `deleted_by_user_id`, `last_edited_by_user_id`, and `user_id` participant or reaction references.
 - External application servers call chat through Envoy Gateway; chat must not trust arbitrary caller-supplied actor identity and must authorize from Envoy-validated access-token context at its own boundary.
 - Chat authorizes direct-message reads and writes from `direct_conversation_member` rows it owns.
-- `realtime` receives best-effort synchronous notify calls after durable writes and also consumes durable chat events for repair or catch-up behavior.
+- `realtime` receives best-effort synchronous `PublishEvent` calls after durable writes and also consumes durable chat events for repair or catch-up behavior.
 - `bootstrap` and other downstream consumers materialize projections from durable chat events rather than querying chat tables directly.
 - Chat inserts integration events into its local `outbox_event` table in the same transaction as the source write.
 

@@ -7,22 +7,19 @@ flowchart LR
     Gateway -->|authenticated websocket upgrade| Realtime[realtime]
     Realtime -->|attach/subscribe populates routes| Routes[In-memory session registry and subscription maps]
 
-    Chat[chat] -->|gRPC PublishChannelMessage| Realtime
-    Chat -->|gRPC PublishDirectMessage| Realtime
+    Chat[chat] -->|gRPC PublishEvent| Realtime
 
     Realtime -->|fanout channel message by last-known authorized route| WS1[connected channel sessions]
     Realtime -->|fanout direct message by last-known authorized route| WS2[connected DM participant sessions]
 
-    Workspace[workspace] -->|gRPC PushWorkspaceEvent or durable workspace events| Realtime
+    Workspace[workspace] -->|gRPC PublishEvent or durable workspace events| Realtime
 
     subgraph Realtime State
         Routes
         Redis[(Redis\npresence_state / presence_sessions)]
-        Cursor[(Postgres\nrealtime_delivery_cursor)]
     end
 
     Realtime -->|set online/offline presence| Redis
-    Realtime -->|track minimal recovery cursor| Cursor
 
     Chat -->|outbox_event via sidecar| RabbitMQ[RabbitMQ]
     Workspace -->|outbox_event via sidecar| RabbitMQ
@@ -37,10 +34,10 @@ flowchart LR
 
 Notes:
 
-- `chat -> realtime` gRPC is the low-latency path for already committed channel and DM writes.
+- `chat -> realtime` gRPC `PublishEvent` is low-latency path for already committed writes.
 - Envoy Gateway is the backend ingress and policy boundary for websocket attach; realtime still owns connected-session routing and delivery behavior.
 - Routing state is ephemeral and populated by websocket attach/subscribe after auth; stale routes are pruned when upstream ownership changes converge.
 - RabbitMQ consumption is the backup and recovery path when direct fanout fails or is delayed for active sessions.
 - Full reconnect history catch-up is not performed by realtime; clients must reload from chat/bootstrap reads after reconnect.
-- Redis is the primary v1 presence store; Postgres stays minimal and operational.
+- Redis is the primary v1 presence store; realtime stays stateless beyond routing and presence.
 - Realtime owns websocket delivery and presence only; it does not become the durable message authority.

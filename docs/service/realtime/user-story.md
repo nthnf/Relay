@@ -1,5 +1,9 @@
 # Realtime User Stories
 
+## Open the app and subscribe
+
+As a connected user, I open one websocket to realtime, then subscribe to channels or direct conversations so live updates flow without realtime owning durable history.
+
 ## Receive a new workspace-channel message with minimal latency
 
 As a connected workspace member, I receive a new channel message quickly after chat durably commits it so my websocket session updates without waiting for the durable event pipeline.

@@ -2,6 +2,8 @@
 
 Realtime primarily consumes durable events published by source-of-truth services. Those events are the backup and recovery path when direct low-latency fanout was missed or delayed while a connection remained active. Full reconnect catch-up and history reload are not owned by realtime.
 
+When chat or workspace call realtime directly, they should use the same logical event envelope as durable broker delivery: `event_id`, `event_type`, `target_kind`, `target_id`, `payload`, `occurred_at`.
+
 ## Consumed Events
 
 ### From `chat`
@@ -11,7 +13,7 @@ Realtime primarily consumes durable events published by source-of-truth services
 **Why consumed**
 
 - Backup event path for workspace-channel and direct-message fanout.
-- Recovery path when synchronous `PublishChannelMessage` or `PublishDirectMessage` did not reach all intended connected sessions.
+- Recovery path when synchronous `PublishEvent` did not reach all intended connected sessions.
 
 **Minimum payload used by realtime**
 
@@ -96,7 +98,7 @@ Consumed so connected clients converge reaction-removal state through the durabl
 
 - Durable chat and workspace events remain authoritative; realtime never republishes them as replacement message truth.
 - The backup event path must treat channel and DM message-create delivery as equally supported v1 cases.
-- In v1, the direct hot path is only `PublishChannelMessage` and `PublishDirectMessage` for message-create fanout.
+- In v1, the direct hot path is `PublishEvent` for message-create and selected workspace refresh fanout.
 - Edits, deletes, and reactions converge only through durable event consumption in v1.
 - Consumers must be idempotent because a connected client may already have received the same update from direct gRPC fanout.
 - Duplicate websocket deliveries are allowed in rare races; clients should dedupe by `event_id`.

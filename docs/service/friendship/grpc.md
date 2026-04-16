@@ -5,8 +5,9 @@ Friendship exposes synchronous relationship command and bounded read contracts. 
 ## Shared Contract Rules
 
 - Authenticated actor identity is derived from Envoy-validated access-token context; callers must not be allowed to mutate another actor's relationship state by supplying arbitrary user IDs.
+- Envoy calls identity `Authorization/Check` on protected routes, then forwards trusted actor headers such as `x-user-id` out-of-band to friendship.
 - External application callers do not supply actor identity in request payloads for end-user actions; the transport boundary or a trusted backend caller context attaches it out-of-band.
-- Friendship enforces target-user existence at its own boundary by validating write-path target IDs against local replicated `user_account` rows; upstream callers may pre-validate, but friendship must not rely on ingress-only checks.
+- Friendship enforces target-user existence at its own boundary by validating write-path target IDs against local replicated `user_account` rows; this mirror is for target validation only, not for re-validating the authenticated actor header.
 - If local replica lacks target user, friendship rejects write with not-found-style domain error and persists no relationship row for that target.
 - Blocking precedence applies to all normal friend interactions. If either direction has an active `user_block` row, `CreateFriendRequest` and `AcceptFriendRequest` must fail with a conflict-style domain error.
 - Accepted friendship is symmetric and must be created or removed as two `friendship_edge` rows in one transaction.

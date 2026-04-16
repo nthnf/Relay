@@ -10,6 +10,20 @@ Realtime owns websocket connection handling, low-latency fanout to connected cli
 - Track v1 online/offline presence in Redis for currently connected users.
 - Consume durable chat and workspace events from RabbitMQ for replay, repair, and catch-up delivery behavior.
 - Evict or disconnect active sessions when downstream authority changes require it.
+- Stay thin: realtime owns delivery state, not durable chat, workspace, or DM truth.
+
+## Socket Flow
+
+- Client opens one websocket to realtime for live delivery only.
+- Client fetches history and durable state from `chat`, `workspace`, or `bootstrap`.
+- Client sends subscribe and unsubscribe messages for targets, not raw connection IDs.
+- Realtime stores session and target routing in memory or Redis, then uses it to fan out events.
+
+Example:
+
+- `session_registry`: `sess_1 -> actor_user_id=u1`
+- `target_subscription_map`: `workspace_channel:ch1 -> [sess_1, sess_9]`
+- One websocket can subscribe to many targets.
 
 ## Non-Goals
 
@@ -22,33 +36,30 @@ Realtime owns websocket connection handling, low-latency fanout to connected cli
 ## Boundary Notes
 
 - Envoy Gateway handles backend ingress policy.
+- Envoy calls identity `Authorization/Check` before protected websocket upgrade and forwards trusted actor headers such as `x-user-id` and `x-session-id` to realtime.
 - Realtime retains service-owned session/control and delivery authorization responsibility at its own boundary.
+- Frontend never writes durable chat or workspace data through realtime; it only connects websocket sessions for live delivery.
 
 ## Dependencies
 
 - **external application server through Envoy Gateway** for authenticated websocket upgrade routing and session context forwarding.
-- **chat** for synchronous low-latency `PublishChannelMessage` and `PublishDirectMessage` fanout calls after durable writes commit.
+- **chat** for synchronous low-latency `PublishEvent` fanout calls after durable writes commit.
 - **workspace** as the owner of durable membership and channel-change events consumed for connected-client refresh and session eviction.
-- **identity** as the owner of stable `user_id` references used for actor/session targeting.
 - **RabbitMQ** for durable backup and recovery inputs when direct fanout is unavailable or delayed.
 - **Redis** as the primary v1 store for online/offline presence state and lightweight session-presence coordination.
-- **Postgres** for any minimal service-owned durable recovery or operational cursors.
 
 ## Storage
 
-- Realtime may own a dedicated Postgres database, but v1 durable ownership stays intentionally minimal.
 - Routing and subscription state is ephemeral by default: per-node websocket session registry in memory plus in-memory target subscription maps.
 - Subscription state is populated during websocket attach and subsequent subscribe flows after authenticated session context is established.
 - Realtime uses last-known authorized subscription state for low-latency delivery, then converges quickly when `workspace` or `chat` ownership changes arrive through direct control calls or durable events.
 - Redis is the primary v1 state store for presence because presence is ephemeral and online/offline-oriented.
 - Message payloads, membership authority, and channel metadata are never durably owned here.
-- Durable backup and recovery behavior may keep small operational cursor rows in Postgres without making realtime a system-of-record for chat state.
+- No durable cursor is required in v1. If recovery bookkeeping is needed later, add it only as optional operational metadata, not source of truth.
 
 ## gRPC Surface
 
-- `PublishChannelMessage`
-- `PublishDirectMessage`
-- `PushWorkspaceEvent`
+- `PublishEvent`
 - `DisconnectActorSessions`
 
 See `grpc.md` for request, response, caller, and latency rules.
@@ -64,7 +75,7 @@ See `events.md` for payload and handling rules.
 
 ## Latency Model
 
-- `chat -> realtime` gRPC fanout for channel messages and direct messages is the low-latency path for already committed durable writes.
+- `chat -> realtime` gRPC `PublishEvent` fanout is low-latency path for already committed durable writes.
 - The synchronous gRPC path is best-effort for delivery speed only; a realtime failure must not invalidate a committed chat write.
 - RabbitMQ event consumption is the backup and recovery path for missed channel or DM fanout while a connection remains active, plus downstream convergence after transient direct-path failure.
 - Rare duplicate websocket deliveries are allowed during failover or race conditions; clients should dedupe using `event_id`.

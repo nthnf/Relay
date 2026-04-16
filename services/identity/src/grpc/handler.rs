@@ -1,3 +1,6 @@
+use envoy_types::ext_authz::v3::pb::{
+    Authorization, AuthorizationServer, CheckRequest, CheckResponse,
+};
 use relay_proto::identity::identity_service_server::{IdentityService, IdentityServiceServer};
 use relay_proto::identity::{
     AuthenticatePasswordRequest, GetUserProfileRequest, GetUserProfileResponse,
@@ -40,6 +43,7 @@ pub(super) fn actor_user_id<T>(request: &Request<T>) -> Result<Uuid, Status> {
     Uuid::parse_str(raw).map_err(|_| Status::unauthenticated("invalid authenticated actor context"))
 }
 
+#[derive(Clone)]
 pub struct Handler {
     pub(super) connection: DatabaseConnection,
     pub(super) auth: AuthKeys,
@@ -52,6 +56,10 @@ impl Handler {
 
     pub fn into_server(self) -> IdentityServiceServer<Self> {
         IdentityServiceServer::new(self)
+    }
+
+    pub fn into_auth_server(self) -> AuthorizationServer<Self> {
+        AuthorizationServer::new(self)
     }
 }
 
@@ -118,5 +126,15 @@ impl IdentityService for Handler {
         request: Request<GetUsersByIdsRequest>,
     ) -> Result<Response<GetUsersByIdsResponse>, Status> {
         self.get_users_by_ids(request).await
+    }
+}
+
+#[tonic::async_trait]
+impl Authorization for Handler {
+    async fn check(
+        &self,
+        request: Request<CheckRequest>,
+    ) -> Result<Response<CheckResponse>, Status> {
+        self.check(request).await
     }
 }

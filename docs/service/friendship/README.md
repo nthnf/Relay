@@ -13,7 +13,7 @@ Friendship owns friend requests, accepted friendships, user blocks, and the rela
 
 ## Non-Goals
 
-- Not source of truth for user accounts; `identity` owns that. Friendship keeps replicated `user_account` read model only.
+- Not source of truth for user accounts; `identity` owns that. Friendship keeps replicated `user_account` read model only for target-user validation.
 - Serving the public HTTP edge; external application servers reach friendship through Envoy Gateway, while friendship keeps service-owned authorization.
 - Acting as the canonical UI aggregate read service; `bootstrap` owns projection-backed friend-list reads.
 - Inventing followers, groups, recommendations, or other social features outside direct bilateral relationships.
@@ -62,6 +62,7 @@ See `events.md` for payload and publication rules.
 - Friend requests are directional: requester and addressee are not interchangeable on the request row.
 - Accepted friendships are symmetric: v1 stores one edge per direction so reads stay user-scoped and simple.
 - Blocking takes precedence over normal friend flows. If either direction is blocked, the pair cannot create or accept a friend request.
+- Envoy-protected routes arrive with trusted actor headers such as `x-user-id` populated by identity `Authorization/Check`.
 - Friendship validates write-path target users against local replicated `user_account` rows before creating a friend request or block. Upstream callers may pre-validate, but friendship still enforces the invariant at its own boundary.
 - If local `user_account` row absent, friendship rejects the write and does not persist orphaned `friend_request`, `friendship_edge`, or `user_block` rows.
 - `BlockUser` removes any accepted friendship edges for the pair and clears pending requests in either direction in the same local transaction.

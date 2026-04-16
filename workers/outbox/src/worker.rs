@@ -1,16 +1,15 @@
 use crate::{config::Config, entity::outbox_event};
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use lapin::{
+    BasicProperties, Channel, Confirmation, Connection, ConnectionProperties, ExchangeKind,
     options::{BasicPublishOptions, ConfirmSelectOptions, ExchangeDeclareOptions},
-    Confirmation,
     types::{AMQPValue, FieldTable, LongString, ShortString},
-    BasicProperties, Channel, Connection, ConnectionProperties, ExchangeKind,
 };
+use sea_orm::sea_query::{LockBehavior, LockType};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, Database, DatabaseConnection, EntityTrait,
     QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
 };
-use sea_orm::sea_query::{LockBehavior, LockType};
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{error, info, warn};
@@ -137,10 +136,7 @@ async fn claim_batch(
     Ok(claimed_rows)
 }
 
-fn eligible_rows_condition(
-    now: DateTime<Utc>,
-    expired_claim_before: DateTime<Utc>,
-) -> Condition {
+fn eligible_rows_condition(now: DateTime<Utc>, expired_claim_before: DateTime<Utc>) -> Condition {
     Condition::any()
         .add(
             Condition::all()
@@ -179,7 +175,9 @@ async fn publish_claimed_row(
     match confirm.await? {
         Confirmation::Ack(_) => Ok(()),
         Confirmation::Nack(_) => Err("broker returned nack for outbox publish".into()),
-        Confirmation::NotRequested => Err("publisher confirms were not enabled on the channel".into()),
+        Confirmation::NotRequested => {
+            Err("publisher confirms were not enabled on the channel".into())
+        }
     }
 }
 
@@ -300,7 +298,10 @@ mod tests {
 
     #[test]
     fn routing_key_uses_publisher_service_and_event_type() {
-        assert_eq!(routing_key("identity", "UserRegistered"), "identity.UserRegistered");
+        assert_eq!(
+            routing_key("identity", "UserRegistered"),
+            "identity.UserRegistered"
+        );
     }
 
     #[test]

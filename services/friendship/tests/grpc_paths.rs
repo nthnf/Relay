@@ -6,9 +6,9 @@ use friendship::{
 use migration::{Migrator, MigratorTrait};
 use relay_proto::friendship::friendship_service_client::FriendshipServiceClient;
 use relay_proto::friendship::{
-    AcceptFriendRequestRequest, BlockUserRequest, CreateFriendRequestRequest,
-    ListFriendsRequest, ListPendingRequestsRequest, RejectFriendRequestRequest,
-    RemoveFriendRequest, UnblockUserRequest,
+    AcceptFriendRequestRequest, BlockUserRequest, CreateFriendRequestRequest, ListFriendsRequest,
+    ListPendingRequestsRequest, RejectFriendRequestRequest, RemoveFriendRequest,
+    UnblockUserRequest,
 };
 use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 use testcontainers_modules::{
@@ -26,7 +26,6 @@ async fn create_friend_request_path() -> Result<(), Box<dyn std::error::Error>> 
     let actor = Uuid::new_v4();
     let target = Uuid::new_v4();
 
-    env.seed_user(actor, false).await?;
     env.seed_user(target, false).await?;
 
     let response = env
@@ -56,13 +55,37 @@ async fn create_friend_request_path() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[tokio::test]
+async fn create_friend_request_rejects_unknown_target() -> Result<(), Box<dyn std::error::Error>> {
+    let env = TestEnv::start().await?;
+    let actor = Uuid::new_v4();
+    let target = Uuid::new_v4();
+
+    let error = env
+        .client
+        .clone()
+        .create_friend_request(actor_request(
+            actor,
+            CreateFriendRequestRequest {
+                target_user_id: target.to_string(),
+            },
+        ))
+        .await
+        .expect_err("missing target should be rejected");
+
+    assert_eq!(error.code(), tonic::Code::NotFound);
+    assert_eq!(error.message(), "User not found");
+
+    env.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test]
 async fn accept_friend_request_path() -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
     let actor = Uuid::new_v4();
     let requester = Uuid::new_v4();
 
     env.seed_user(actor, false).await?;
-    env.seed_user(requester, false).await?;
 
     let created = env
         .client
@@ -106,7 +129,6 @@ async fn reject_friend_request_path() -> Result<(), Box<dyn std::error::Error>> 
     let requester = Uuid::new_v4();
 
     env.seed_user(actor, false).await?;
-    env.seed_user(requester, false).await?;
 
     let created = env
         .client
@@ -151,7 +173,6 @@ async fn remove_friend_path() -> Result<(), Box<dyn std::error::Error>> {
     let actor = Uuid::new_v4();
     let friend = Uuid::new_v4();
 
-    env.seed_user(actor, false).await?;
     env.seed_user(friend, false).await?;
 
     let created = env
@@ -248,7 +269,6 @@ async fn unblock_user_path() -> Result<(), Box<dyn std::error::Error>> {
     let blocker = Uuid::new_v4();
     let blocked = Uuid::new_v4();
 
-    env.seed_user(blocker, false).await?;
     env.seed_user(blocked, false).await?;
 
     env.client
@@ -286,7 +306,6 @@ async fn list_friends_path() -> Result<(), Box<dyn std::error::Error>> {
     let actor = Uuid::new_v4();
     let friend = Uuid::new_v4();
 
-    env.seed_user(actor, false).await?;
     env.seed_user(friend, false).await?;
 
     let created = env
@@ -337,7 +356,6 @@ async fn list_pending_requests_path() -> Result<(), Box<dyn std::error::Error>> 
     let requester = Uuid::new_v4();
     let addressee = Uuid::new_v4();
 
-    env.seed_user(requester, false).await?;
     env.seed_user(addressee, false).await?;
 
     env.client
@@ -365,7 +383,10 @@ async fn list_pending_requests_path() -> Result<(), Box<dyn std::error::Error>> 
         .into_inner();
 
     assert_eq!(response.requests.len(), 1);
-    assert_eq!(response.requests[0].requester_user_id, requester.to_string());
+    assert_eq!(
+        response.requests[0].requester_user_id,
+        requester.to_string()
+    );
 
     env.shutdown().await;
     Ok(())

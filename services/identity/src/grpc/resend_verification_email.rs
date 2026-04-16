@@ -1,6 +1,8 @@
 use chrono::Utc;
 use relay_proto::identity::{ResendVerificationEmailRequest, ResendVerificationEmailResponse};
-use sea_orm::{ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set, TransactionError, TransactionTrait};
+use sea_orm::{
+    ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set, TransactionError, TransactionTrait,
+};
 use tonic::{Request, Response, Status};
 use tracing::error;
 use uuid::Uuid;
@@ -28,11 +30,15 @@ impl Handler {
             })?;
 
         let Some(user) = user else {
-            return Ok(Response::new(ResendVerificationEmailResponse { accepted: true }));
+            return Ok(Response::new(ResendVerificationEmailResponse {
+                accepted: true,
+            }));
         };
 
         if user.email_verified_at.is_some() || user.account_status != "active" {
-            return Ok(Response::new(ResendVerificationEmailResponse { accepted: true }));
+            return Ok(Response::new(ResendVerificationEmailResponse {
+                accepted: true,
+            }));
         }
 
         let now = Utc::now();

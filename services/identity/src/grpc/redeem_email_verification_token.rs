@@ -1,12 +1,16 @@
 use chrono::{Duration, Utc};
 use relay_proto::identity::{RedeemEmailVerificationTokenRequest, TokenPairResponse};
-use sea_orm::{ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set, TransactionError, TransactionTrait};
+use sea_orm::{
+    ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set, TransactionError, TransactionTrait,
+};
 use tonic::{Request, Response, Status};
 use tracing::error;
 use uuid::Uuid;
 
 use crate::auth::{ACCESS_TOKEN_VALIDITY, hash_token};
-use crate::entity::{email_verification_token, outbox_event, user_account, user_session, user_profile};
+use crate::entity::{
+    email_verification_token, outbox_event, user_account, user_profile, user_session,
+};
 use crate::event::UserEmailVerifiedPayload;
 
 use super::handler::{Handler, payload_value, to_timestamp};

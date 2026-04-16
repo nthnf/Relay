@@ -5,6 +5,7 @@ Identity exposes synchronous account, refresh-session, and profile-basic contrac
 ## Shared Contract Rules
 
 - Authenticated end-user RPCs derive actor/session context from Envoy-validated access-JWT claims and forwarded request context.
+- Envoy may call identity `Authorization/Check` before forwarding protected requests or websocket upgrades, then attach validated actor context out-of-band.
 - Unauthenticated auth-entry RPCs such as `RegisterUser` and `AuthenticatePassword` do not require an already-authenticated actor.
 - `RefreshSession` is also a public auth-entry RPC and validates the presented refresh token inside identity rather than relying on an already-authenticated access JWT.
 - Internal bounded lookup RPCs such as `GetUsersByIds` are internal service calls and are not ingress-authenticated end-user actions.

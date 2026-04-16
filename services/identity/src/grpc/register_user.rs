@@ -14,7 +14,7 @@ use crate::entity::{
 use crate::event::{UserRegisteredPayload, VerificationEmailRequestedPayload};
 
 use super::handler::{
-    payload_value, to_timestamp, EMAIL_NORMALIZED_CONSTRAINT, Handler, USERNAME_CONSTRAINT,
+    EMAIL_NORMALIZED_CONSTRAINT, Handler, USERNAME_CONSTRAINT, payload_value, to_timestamp,
 };
 
 impl Handler {

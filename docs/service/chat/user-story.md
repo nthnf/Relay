@@ -1,5 +1,9 @@
 # Chat User Stories
 
+## Open the app and load my inbox
+
+As a signed-in user, I open one websocket to `realtime` for live delivery, then fetch history, channel lists, and DM state from `chat`, `workspace`, or `bootstrap` so durable data stays on source-of-truth services.
+
 ## Send a message to a workspace channel
 
 As an active workspace member, I can send a message to a channel so chat durably stores the message as the source of truth, assigns channel-scoped ordering, and then attempts low-latency realtime fanout without making delivery a prerequisite for write success.

@@ -11,7 +11,13 @@ Chat owns durable message writes and message-history state for both workspace ch
 - Persist message edits, soft deletes, and reaction state.
 - Serve bounded message-history reads for channels and direct-message conversations.
 - Insert matching `outbox_event` rows in the same transaction as message-domain writes.
-- Notify `realtime` synchronously after successful durable message-create writes so connected clients can update with low latency.
+- Call `realtime.PublishEvent` synchronously after successful durable message-create writes so connected clients can update with low latency.
+
+## App Open Flow
+
+- Frontend opens websocket to `realtime` for live delivery only.
+- Frontend fetches history and sidebar data from `chat`, `workspace`, or `bootstrap`.
+- `chat` and `workspace` remain write and history authorities; `realtime` never serves durable source data.
 
 ## Non-Goals
 
@@ -68,7 +74,7 @@ See `events.md` for payload and publication rules.
 
 - Chat remains the durable source of truth for message acceptance and persisted history.
 - Workspace continues to own workspace membership and channel metadata, while chat owns direct-message conversation metadata and participant rows.
-- After a message-create write commits successfully, chat may synchronously call `realtime` so connected clients can receive low-latency fanout.
+- After a message-create write commits successfully, chat may synchronously call `realtime.PublishEvent` so connected clients can receive low-latency fanout over existing websocket subscriptions.
 - Edits, deletes, and reactions converge through durable chat events in v1 rather than a direct synchronous `chat -> realtime` hot path.
 - Before accepting a write or history read, chat must validate channel existence and actor access against workspace-owned membership and channel state.
 - Synchronous fanout is best-effort for latency only; a failed notify must not roll back or invalidate an already committed chat write.

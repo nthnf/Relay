@@ -17,7 +17,8 @@ Friendship-local copy of identity account existence and email verification state
 
 Semantic rules:
 
-- Friendship uses this table for local existence validation on write paths.
+- Friendship uses this table only for target-user existence validation on write paths.
+- Authenticated actor identity comes from Envoy-forwarded trusted headers after identity `Authorization/Check` succeeds.
 - `UserRegistered` seeds row.
 - `UserEmailVerified` flips `email_verified` true.
 
@@ -97,6 +98,6 @@ Semantic rules:
 
 - `identity` owns stable `user_id` namespace and publishes account lifecycle events consumed by friendship.
 - Friendship validates write-path target users through local `user_account` mirror and rejects unknown users instead of persisting orphaned relationship rows.
-- External application servers call friendship through Envoy Gateway; friendship does not trust arbitrary caller-supplied actor identity and must authorize from Envoy-validated access-token context at its own boundary.
+- External application servers call friendship through Envoy Gateway; friendship does not trust arbitrary caller-supplied actor identity and reads trusted actor context from Envoy-forwarded headers such as `x-user-id`.
 - `bootstrap` consumes `FriendRequestAccepted` and `FriendshipRemoved` to materialize and remove accepted-friend projection rows.
 - Friendship inserts durable integration events into its local `outbox_event` table in the same transaction as the source write.

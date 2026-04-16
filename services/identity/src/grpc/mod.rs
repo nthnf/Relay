@@ -1,4 +1,5 @@
 pub mod authenticate_password;
+pub mod check;
 pub mod get_user_profile;
 pub mod get_users_by_ids;
 pub mod handler;

@@ -2,7 +2,7 @@
 
 Friendship publishes integration events by inserting service-owned rows into `outbox_event` inside the same transaction as the source relationship write. The shared outbox worker later publishes those rows to RabbitMQ.
 
-Friendship also consumes identity `UserRegistered` and `UserEmailVerified` events to maintain local `user_account` mirror for write-path validation.
+Friendship also consumes identity `UserRegistered` and `UserEmailVerified` events to maintain local `user_account` mirror for target-user validation on write paths.
 
 ## Published Events
 

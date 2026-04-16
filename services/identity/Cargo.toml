@@ -8,6 +8,7 @@ tonic = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }
 tonic-prost = { workspace = true }
+envoy-types = "0.7.3"
 sea-orm = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }

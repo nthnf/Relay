@@ -11,25 +11,24 @@ Realtime exposes hot-path delivery methods used after durable writes already suc
 - Realtime routes to sessions from ephemeral per-node registries and in-memory target subscription maps populated during authenticated websocket attach/subscribe flows.
 - Realtime uses last-known authorized subscription state and must prune stale routes quickly when `workspace`, `chat`, or explicit disconnect control flows indicate access changed.
 - Duplicate websocket deliveries are allowed in rare failover races; delivery envelopes should carry `event_id` so clients can dedupe.
-- For message creates, `target_message_seq` is the authoritative ordering field inside a single channel or direct conversation.
+- For message creates, `target_message_seq` remains authoritative inside one channel or direct conversation and should be carried in `payload`.
 - Realtime only repairs short transient misses while a connection remains active; full reconnect catch-up belongs to chat/bootstrap read paths.
+- Direct gRPC fanout is the hot path; RabbitMQ event consumption remains repair and backup.
 
-### `PublishChannelMessage`
+### `PublishEvent`
 
-**Main caller:** `chat`
+**Main caller:** `chat` or `workspace`
 
 **Latency-sensitive:** yes
 
 **Request fields**
 
 - `event_id` (`uuid/text`) - stable delivery identifier shared with any backup event path for the same logical update.
-- `message_id` (`uuid`)
-- `workspace_id` (`uuid`)
-- `channel_id` (`uuid`)
-- `author_user_id` (`uuid`)
-- `target_message_seq` (`int64`)
-- `body` (`string`)
-- `created_at` (`timestamp`)
+- `event_type` (`string`) - e.g. `MessageCreated`, `WorkspaceMemberRemoved`, `WorkspaceChannelCreated`.
+- `target_kind` (`string`) - e.g. `workspace_channel`, `direct_message`, `workspace_user`.
+- `target_id` (`string`) - channel id, direct conversation id, or user id depending on target kind.
+- `payload` (`bytes` or structured message`) - event-specific fields.
+- `occurred_at` (`timestamp`)
 
 **Response fields**
 
@@ -40,68 +39,10 @@ Realtime exposes hot-path delivery methods used after durable writes already suc
 **Contract notes**
 
 - Used only after chat has durably committed the channel message.
-- Targets currently connected sessions that should already have access to the workspace channel through previously converged state.
+- Targets currently connected sessions that should already have access to the target through previously converged state.
 - Best-effort delivery failure must not cause chat to roll back the committed message.
 - RabbitMQ `MessageCreated` consumption remains the backup event path for replay or missed connected recipients.
 - If the same logical update later arrives from RabbitMQ with the same `event_id`, realtime or the client may dedupe it.
-
-### `PublishDirectMessage`
-
-**Main caller:** `chat`
-
-**Latency-sensitive:** yes
-
-**Request fields**
-
-- `event_id` (`uuid/text`) - stable delivery identifier shared with any backup event path for the same logical update.
-- `message_id` (`uuid`)
-- `direct_conversation_id` (`uuid`)
-- `author_user_id` (`uuid`)
-- `participant_user_ids` (`repeated uuid`) - expected to contain the DM participants for v1.
-- `target_message_seq` (`int64`)
-- `body` (`string`)
-- `created_at` (`timestamp`)
-
-**Response fields**
-
-- `accepted` (`bool`)
-- `attempted_recipient_count` (`int32`)
-- `delivered_session_count` (`int32`)
-
-**Contract notes**
-
-- Direct-message fanout is a first-class v1 contract, not a secondary extension of channel fanout.
-- Used only after chat has durably committed the DM message.
-- Realtime fans out to connected sessions for the DM participants and may include the sending actor's other active sessions.
-- RabbitMQ `MessageCreated` consumption remains the backup event path for any missed DM delivery.
-- If the same logical update later arrives from RabbitMQ with the same `event_id`, realtime or the client may dedupe it.
-
-### `PushWorkspaceEvent`
-
-**Main caller:** `workspace` or a workspace-event bridge owned by `realtime`
-
-**Latency-sensitive:** no
-
-**Request fields**
-
-- `event_type` (`string`) - v1 values include `WorkspaceMemberAdded`, `WorkspaceMemberRemoved`, `WorkspaceChannelCreated`.
-- `workspace_id` (`uuid`)
-- `channel_id` (`uuid optional`)
-- `user_id` (`uuid optional`) - targeted member when relevant.
-- `occurred_at` (`timestamp`)
-- `payload` (`bytes` or structured message`) - event-specific fields.
-
-**Response fields**
-
-- `accepted` (`bool`)
-- `affected_session_count` (`int32`)
-
-**Contract notes**
-
-- Used for connected-client refresh signals, sidebar updates, or access-change handling where websocket delivery helps UX.
-- This method does not replace RabbitMQ consumption; durable workspace events remain the authority for replay and recovery.
-- `WorkspaceMemberRemoved` handling may trigger immediate connected-session eviction or subscription cleanup for the affected actor.
-- This method may also prune channel routing or subscription state derived from last-known authorization.
 
 ### `DisconnectActorSessions`
 

@@ -5,7 +5,7 @@ Realtime owns ephemeral connection-routing and presence state, plus only the min
 ## Durable vs Ephemeral State
 
 - **Ephemeral:** websocket connections, recipient routing maps, target subscription maps, and current online/offline presence.
-- **Durable-minimal:** operational recovery cursors or replay bookkeeping needed so RabbitMQ recovery work stays idempotent across restarts.
+- **Durable-minimal:** none in v1; keep realtime stateless beyond Redis presence and in-memory routing.
 - **Not owned here:** message bodies as authoritative records, membership truth, DM conversation truth, or UI aggregate projections.
 
 ## In-Memory Routing State
@@ -103,29 +103,6 @@ Semantic rules:
 - Duplicate websocket deliveries are allowed in rare races; the logical delivery key is `event_id`.
 - For message creates, ordering is authoritative by chat-assigned `target_message_seq` inside one channel or one direct conversation.
 - Realtime does not own full reconnect catch-up state; durable history reload after reconnect belongs to chat/bootstrap read paths.
-
-## Minimal Postgres State
-
-Realtime may keep a single small durable table for recovery bookkeeping.
-
-### `realtime_delivery_cursor`
-
-Consumer progress and replay checkpoint metadata for durable backup inputs.
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `consumer_name` | `text` | Primary key component identifying one logical consumer flow. |
-| `stream_key` | `text` | Primary key component such as `chat-events` or `workspace-events`. |
-| `last_message_id` | `text` | Last acknowledged broker or application message identifier when available. |
-| `last_processed_at` | `timestamptz` | Last successful processing time. |
-| `updated_at` | `timestamptz` | Audit timestamp for the cursor row. |
-
-Semantic rules:
-
-- This table is operational only; it does not make realtime authoritative for the source event stream.
-- Recovery bookkeeping must remain idempotent because RabbitMQ redelivery and replay are expected.
-- One cursor row may track one logical consumer group or repair workflow, not every end-user delivery attempt.
-- If omitted in implementation, the service must still preserve equivalent restart-safe recovery semantics through broker-managed acknowledgements and documented operational behavior.
 
 ## Cross-Service References
 

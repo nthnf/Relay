@@ -13,11 +13,15 @@ use uuid::Uuid;
 pub const ACCESS_TOKEN_VALIDITY: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Debug, Error)]
-pub enum AuthError {
-    #[error("jwt error: {0}")]
-    Jwt(#[from] jwt_simple::Error),
+pub enum PasswordAuthError {
     #[error("password hash error")]
     PasswordHash,
+}
+
+#[derive(Debug, Error)]
+pub enum TokenAuthError {
+    #[error("jwt error: {0}")]
+    Jwt(#[from] jwt_simple::Error),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -26,6 +30,7 @@ pub struct AccessClaims {
     pub session_id: Uuid,
 }
 
+#[derive(Clone)]
 pub struct AuthKeys {
     access_signing_key: HS256Key,
 }
@@ -37,12 +42,12 @@ impl AuthKeys {
         }
     }
 
-    pub fn sign_access_token(&self, claims: AccessClaims) -> Result<String, AuthError> {
+    pub fn sign_access_token(&self, claims: AccessClaims) -> Result<String, TokenAuthError> {
         let claims = Claims::with_custom_claims(claims, ACCESS_TOKEN_VALIDITY.into());
         Ok(self.access_signing_key.authenticate(claims)?)
     }
 
-    pub fn verify_access_token(&self, token: &str) -> Result<AccessClaims, AuthError> {
+    pub fn verify_access_token(&self, token: &str) -> Result<AccessClaims, TokenAuthError> {
         let claims = self
             .access_signing_key
             .verify_token::<AccessClaims>(token, None)?;
@@ -50,16 +55,16 @@ impl AuthKeys {
     }
 }
 
-pub fn hash_password(secret: &str) -> Result<String, AuthError> {
+pub fn hash_password(secret: &str) -> Result<String, PasswordAuthError> {
     let salt = SaltString::generate(&mut OsRng);
     Argon2::default()
         .hash_password(secret.as_bytes(), &salt)
         .map(|hash| hash.to_string())
-        .map_err(|_| AuthError::PasswordHash)
+        .map_err(|_| PasswordAuthError::PasswordHash)
 }
 
-pub fn verify_password(secret: &str, hash: &str) -> Result<bool, AuthError> {
-    let parsed = PasswordHash::new(hash).map_err(|_| AuthError::PasswordHash)?;
+pub fn verify_password(secret: &str, hash: &str) -> Result<bool, PasswordAuthError> {
+    let parsed = PasswordHash::new(hash).map_err(|_| PasswordAuthError::PasswordHash)?;
     Ok(Argon2::default()
         .verify_password(secret.as_bytes(), &parsed)
         .is_ok())

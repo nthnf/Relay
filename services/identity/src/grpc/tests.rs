@@ -1,10 +1,15 @@
 use chrono::{Duration, Utc};
+use envoy_types::ext_authz::v3::pb::{CheckRequest, CheckResponse, HttpResponse};
+use envoy_types::pb::envoy::service::auth::v3::{
+    AttributeContext,
+    attribute_context::{HttpRequest, Request as AuthRequest},
+};
 use relay_proto::identity::{
     AuthenticatePasswordRequest, GetUserProfileRequest, GetUsersByIdsRequest,
     RedeemEmailVerificationTokenRequest, RefreshSessionRequest, RegisterUserRequest,
     ResendVerificationEmailRequest, RevokeSessionRequest, UpdateUserProfileRequest,
 };
-use sea_orm::{DbBackend, DbErr, DatabaseConnection, MockDatabase, MockExecResult};
+use sea_orm::{DatabaseConnection, DbBackend, DbErr, MockDatabase, MockExecResult};
 use tonic::Request;
 use uuid::Uuid;
 
@@ -14,10 +19,13 @@ use crate::entity::{
     user_session,
 };
 
-use super::handler::{Handler, ACTOR_USER_ID_METADATA};
+use super::handler::{ACTOR_USER_ID_METADATA, Handler};
 
 fn test_service(db: DatabaseConnection) -> Handler {
-    Handler::new(db, crate::auth::AuthKeys::from_shared_secret(b"test-secret-key"))
+    Handler::new(
+        db,
+        crate::auth::AuthKeys::from_shared_secret(b"test-secret-key"),
+    )
 }
 
 fn register_request() -> Request<RegisterUserRequest> {
@@ -94,7 +102,10 @@ fn update_profile_request(
     request
 }
 
-fn get_user_profile_request(actor_user_id: Option<Uuid>, user_id: Option<Uuid>) -> Request<GetUserProfileRequest> {
+fn get_user_profile_request(
+    actor_user_id: Option<Uuid>,
+    user_id: Option<Uuid>,
+) -> Request<GetUserProfileRequest> {
     let mut request = Request::new(GetUserProfileRequest {
         user_id: user_id.map(|user_id| user_id.to_string()),
     });
@@ -116,6 +127,45 @@ fn get_users_by_ids_request(user_ids: &[Uuid]) -> Request<GetUsersByIdsRequest> 
     Request::new(GetUsersByIdsRequest {
         user_ids: user_ids.iter().map(ToString::to_string).collect(),
     })
+}
+
+fn check_request(token: &str) -> Request<CheckRequest> {
+    Request::new(CheckRequest {
+        attributes: Some(AttributeContext {
+            request: Some(AuthRequest {
+                http: Some(HttpRequest {
+                    headers: std::iter::once((
+                        "authorization".to_string(),
+                        format!("Bearer {token}"),
+                    ))
+                    .collect(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+    })
+}
+
+fn access_token(user_id: Uuid, session_id: Uuid) -> String {
+    crate::auth::AuthKeys::from_shared_secret(b"test-secret-key")
+        .sign_access_token(crate::auth::AccessClaims {
+            user_id,
+            session_id,
+        })
+        .expect("token signing should succeed")
+}
+
+fn assert_denied_check(response: &CheckResponse, message: &str) {
+    let status = response
+        .status
+        .as_ref()
+        .expect("ext_authz response should include a status");
+
+    assert_eq!(status.code, tonic::Code::Unauthenticated as i32);
+    assert_eq!(status.message, message);
+    assert!(response.http_response.is_none());
 }
 
 fn mock_user_account(now: chrono::DateTime<Utc>) -> user_account::Model {
@@ -349,7 +399,10 @@ async fn authenticate_password_returns_tokens_and_creates_session() {
     assert!(response.access_token_expires_at.is_some());
     assert!(response.refresh_token_expires_at.is_some());
     assert!(response.email_verified);
-    assert_eq!(response.profile.as_ref().map(|p| p.username.as_str()), Some("alice"));
+    assert_eq!(
+        response.profile.as_ref().map(|p| p.username.as_str()),
+        Some("alice")
+    );
 
     let statement_dump = db
         .into_transaction_log()
@@ -400,6 +453,170 @@ async fn authenticate_password_rejects_invalid_credentials() {
 }
 
 #[tokio::test]
+async fn check_accepts_active_session() {
+    let now = Utc::now();
+    let user = mock_verified_user_account(now);
+    let expected_user_id = user.user_id.to_string();
+    let session_id = Uuid::new_v4();
+    let session = user_session::Model {
+        session_id,
+        user_id: user.user_id,
+        refresh_token_hash: hash_token("refresh-token"),
+        issued_at: now.into(),
+        refresh_expires_at: (now + Duration::days(7)).into(),
+        revoked_at: None,
+        revoke_reason: None,
+        replaced_by_session_id: None,
+        client_instance_id: None,
+        created_at: now.into(),
+    };
+
+    let token = access_token(user.user_id, session_id);
+
+    let db = MockDatabase::new(DbBackend::Postgres)
+        .append_query_results([[user]])
+        .append_query_results([[session]])
+        .into_connection();
+
+    let response = test_service(db)
+        .check(check_request(&token))
+        .await
+        .expect("token should validate")
+        .into_inner();
+    let expected_session_id = session_id.to_string();
+    let status = response
+        .status
+        .clone()
+        .expect("ext_authz response should include a status");
+    let ok_response = match response.http_response {
+        Some(HttpResponse::OkResponse(ok_response)) => ok_response,
+        other => panic!("expected ok http response, got {other:?}"),
+    };
+
+    let headers = ok_response
+        .headers
+        .iter()
+        .filter_map(|header| {
+            header
+                .header
+                .as_ref()
+                .map(|value| (value.key.as_str(), value.value.as_str()))
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+
+    assert_eq!(status.code, tonic::Code::Ok as i32);
+    assert_eq!(status.message, "request is valid");
+    assert_eq!(
+        headers.get("x-user-id").copied(),
+        Some(expected_user_id.as_str())
+    );
+    assert_eq!(
+        headers.get("x-session-id").copied(),
+        Some(expected_session_id.as_str())
+    );
+}
+
+#[tokio::test]
+async fn check_rejects_missing_bearer_token() {
+    let response = test_service(MockDatabase::new(DbBackend::Postgres).into_connection())
+        .check(Request::new(CheckRequest::default()))
+        .await
+        .expect("missing token should be handled as a denied response")
+        .into_inner();
+
+    assert_denied_check(&response, "missing bearer token");
+}
+
+#[tokio::test]
+async fn check_rejects_unknown_user() {
+    let token = access_token(Uuid::new_v4(), Uuid::new_v4());
+    let db = MockDatabase::new(DbBackend::Postgres)
+        .append_query_results([Vec::<user_account::Model>::new()])
+        .into_connection();
+
+    let response = test_service(db)
+        .check(check_request(&token))
+        .await
+        .expect("unknown user should be handled as a denied response")
+        .into_inner();
+
+    assert_denied_check(&response, "unknown user");
+}
+
+#[tokio::test]
+async fn check_rejects_inactive_account() {
+    let now = Utc::now();
+    let user = user_account::Model {
+        account_status: "disabled".to_string(),
+        ..mock_verified_user_account(now)
+    };
+    let token = access_token(user.user_id, Uuid::new_v4());
+    let db = MockDatabase::new(DbBackend::Postgres)
+        .append_query_results([[user]])
+        .into_connection();
+
+    let response = test_service(db)
+        .check(check_request(&token))
+        .await
+        .expect("inactive account should be handled as a denied response")
+        .into_inner();
+
+    assert_denied_check(&response, "account is not active");
+}
+
+#[tokio::test]
+async fn check_rejects_unknown_session() {
+    let now = Utc::now();
+    let user = mock_verified_user_account(now);
+    let session_id = Uuid::new_v4();
+    let token = access_token(user.user_id, session_id);
+    let db = MockDatabase::new(DbBackend::Postgres)
+        .append_query_results([[user]])
+        .append_query_results([Vec::<user_session::Model>::new()])
+        .into_connection();
+
+    let response = test_service(db)
+        .check(check_request(&token))
+        .await
+        .expect("unknown session should be handled as a denied response")
+        .into_inner();
+
+    assert_denied_check(&response, "unknown session");
+}
+
+#[tokio::test]
+async fn check_rejects_revoked_session() {
+    let now = Utc::now();
+    let user = mock_verified_user_account(now);
+    let session_id = Uuid::new_v4();
+    let token = access_token(user.user_id, session_id);
+    let session = user_session::Model {
+        session_id,
+        user_id: user.user_id,
+        refresh_token_hash: hash_token("refresh-token"),
+        issued_at: now.into(),
+        refresh_expires_at: (now + Duration::days(7)).into(),
+        revoked_at: Some(now.into()),
+        revoke_reason: Some("logout".to_string()),
+        replaced_by_session_id: None,
+        client_instance_id: None,
+        created_at: now.into(),
+    };
+    let db = MockDatabase::new(DbBackend::Postgres)
+        .append_query_results([[user]])
+        .append_query_results([[session]])
+        .into_connection();
+
+    let response = test_service(db)
+        .check(check_request(&token))
+        .await
+        .expect("revoked session should be handled as a denied response")
+        .into_inner();
+
+    assert_denied_check(&response, "session revoked");
+}
+
+#[tokio::test]
 async fn refresh_session_rotates_session_and_returns_new_tokens() {
     let now = Utc::now();
     let user = mock_verified_user_account(now);
@@ -444,7 +661,10 @@ async fn refresh_session_rotates_session_and_returns_new_tokens() {
     assert!(response.access_token_expires_at.is_some());
     assert!(response.refresh_token_expires_at.is_some());
     assert!(response.email_verified);
-    assert_eq!(response.profile.as_ref().map(|p| p.username.as_str()), Some("alice"));
+    assert_eq!(
+        response.profile.as_ref().map(|p| p.username.as_str()),
+        Some("alice")
+    );
 
     let claims = service
         .auth
@@ -696,7 +916,10 @@ async fn redeem_email_verification_token_creates_first_session_and_outbox() {
     assert!(response.access_token_expires_at.is_some());
     assert!(response.refresh_token_expires_at.is_some());
     assert!(response.email_verified);
-    assert_eq!(response.profile.as_ref().map(|p| p.username.as_str()), Some("alice"));
+    assert_eq!(
+        response.profile.as_ref().map(|p| p.username.as_str()),
+        Some("alice")
+    );
 
     let claims = service
         .auth
@@ -978,7 +1201,10 @@ async fn get_user_profile_rejects_cross_user_lookup_on_actor_route() {
         .expect_err("cross-user profile lookup should be denied");
 
     assert_eq!(error.code(), tonic::Code::PermissionDenied);
-    assert_eq!(error.message(), "cross-user profile lookup is not allowed on this route");
+    assert_eq!(
+        error.message(),
+        "cross-user profile lookup is not allowed on this route"
+    );
 }
 
 #[tokio::test]

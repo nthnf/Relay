@@ -10,6 +10,7 @@ Identity owns user accounts, credentials, profile basics, email verification sta
 - Mint short-lived access JWTs plus rotating refresh tokens.
 - Rotate refresh tokens and revoke the prior refresh token on successful refresh.
 - Revoke refresh sessions explicitly on logout, disable, or other identity-owned security actions.
+- Validate access JWTs for Envoy gateway auth decisions.
 - Enforce account status so disabled accounts cannot authenticate or continue using existing sessions.
 - Own profile basics needed across the platform: username, display name, avatar URL, and email verification status.
 - Issue and redeem email verification tokens.
@@ -42,6 +43,7 @@ Identity owns user accounts, credentials, profile basics, email verification sta
 - `AuthenticatePassword`
 - `RefreshSession`
 - `RevokeSession`
+- `Authorization/Check` (Envoy ext_authz)
 - `RedeemEmailVerificationToken`
 - `ResendVerificationEmail`
 - `UpdateUserProfile`

@@ -4,3 +4,19 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+axum = { version = "0.8.9", features = ["ws"] }
+axum-extra = { version = "0.12.6", features = ["typed-header"] }
+futures-util = { version = "0.3.32", features = [
+  "sink",
+  "std",
+], default-features = false }
+tower-http = { version = "0.6.8", features = ["fs", "trace"] }
+headers = "0.4.1"
+redis = { version = "1.2", features = [
+  "tokio-comp",
+  "tokio-rustls-comp",
+  "r2d2",
+] }
