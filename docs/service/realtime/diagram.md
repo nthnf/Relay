@@ -7,12 +7,12 @@ flowchart LR
     Gateway -->|authenticated websocket upgrade| Realtime[realtime]
     Realtime -->|attach/subscribe populates routes| Routes[In-memory session registry and subscription maps]
 
-    Chat[chat] -->|gRPC PublishEvent| Realtime
+    Chat[chat] -->|gRPC DeliverMessage| Realtime
 
     Realtime -->|fanout channel message by last-known authorized route| WS1[connected channel sessions]
     Realtime -->|fanout direct message by last-known authorized route| WS2[connected DM participant sessions]
 
-    Workspace[workspace] -->|gRPC PublishEvent or durable workspace events| Realtime
+    Workspace[workspace] -->|gRPC DeliverMessage or durable workspace events| Realtime
 
     subgraph Realtime State
         Routes
@@ -24,7 +24,7 @@ flowchart LR
     Chat -->|outbox_event via sidecar| RabbitMQ[RabbitMQ]
     Workspace -->|outbox_event via sidecar| RabbitMQ
 
-    RabbitMQ -->|MessageCreated / MessageEdited / MessageDeleted / reaction events with event_id| Realtime
+    RabbitMQ -->|MessageCreated / MessageEdited / MessageDeleted with delivery_id| Realtime
     RabbitMQ -->|WorkspaceMemberAdded / WorkspaceMemberRemoved / WorkspaceChannelCreated| Realtime
 
     Realtime -->|prune stale routes on access change| Routes
@@ -34,7 +34,7 @@ flowchart LR
 
 Notes:
 
-- `chat -> realtime` gRPC `PublishEvent` is low-latency path for already committed writes.
+- `chat -> realtime` gRPC `DeliverMessage` is low-latency path for already committed writes.
 - Envoy Gateway is the backend ingress and policy boundary for websocket attach; realtime still owns connected-session routing and delivery behavior.
 - Routing state is ephemeral and populated by websocket attach/subscribe after auth; stale routes are pruned when upstream ownership changes converge.
 - RabbitMQ consumption is the backup and recovery path when direct fanout fails or is delayed for active sessions.

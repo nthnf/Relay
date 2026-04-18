@@ -11,8 +11,6 @@ service ChatService {
   rpc ListChannelMessages(ListChannelMessagesRequest) returns (ListMessagesResponse);
   rpc GetOrCreateDirectConversation(GetOrCreateDirectConversationRequest) returns (GetOrCreateDirectConversationResponse);
   rpc ListDirectConversationMessages(ListDirectConversationMessagesRequest) returns (ListMessagesResponse);
-  rpc AddReaction(AddReactionRequest) returns (ReactionMutationResponse);
-  rpc RemoveReaction(RemoveReactionRequest) returns (RemoveReactionResponse);
 }
 
 message CreateMessageRequest {
@@ -101,29 +99,4 @@ message GetOrCreateDirectConversationResponse {
   repeated string member_user_ids = 2;
   google.protobuf.Timestamp created_at = 3;
   bool created = 4;
-}
-
-message AddReactionRequest {
-  string message_id = 1;
-  string reaction_key = 2;
-}
-
-message ReactionMutationResponse {
-  string message_id = 1;
-  string reaction_key = 2;
-  string user_id = 3;
-  google.protobuf.Timestamp created_at = 4;
-}
-
-message RemoveReactionRequest {
-  string message_id = 1;
-  string reaction_key = 2;
-}
-
-message RemoveReactionResponse {
-  string message_id = 1;
-  string reaction_key = 2;
-  string user_id = 3;
-  bool removed = 4;
-  optional google.protobuf.Timestamp removed_at = 5;
 }

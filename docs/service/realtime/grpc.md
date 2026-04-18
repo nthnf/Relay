@@ -10,12 +10,12 @@ Realtime exposes hot-path delivery methods used after durable writes already suc
 - gRPC responses acknowledge acceptance for realtime delivery work, not durable message authority.
 - Realtime routes to sessions from ephemeral per-node registries and in-memory target subscription maps populated during authenticated websocket attach/subscribe flows.
 - Realtime uses last-known authorized subscription state and must prune stale routes quickly when `workspace`, `chat`, or explicit disconnect control flows indicate access changed.
-- Duplicate websocket deliveries are allowed in rare failover races; delivery envelopes should carry `event_id` so clients can dedupe.
+- Duplicate websocket deliveries are allowed in rare failover races; delivery envelopes should carry `delivery_id` so clients can dedupe.
 - For message creates, `target_message_seq` remains authoritative inside one channel or direct conversation and should be carried in `payload`.
 - Realtime only repairs short transient misses while a connection remains active; full reconnect catch-up belongs to chat/bootstrap read paths.
 - Direct gRPC fanout is the hot path; RabbitMQ event consumption remains repair and backup.
 
-### `PublishEvent`
+### `DeliverMessage`
 
 **Main caller:** `chat` or `workspace`
 
@@ -23,11 +23,10 @@ Realtime exposes hot-path delivery methods used after durable writes already suc
 
 **Request fields**
 
-- `event_id` (`uuid/text`) - stable delivery identifier shared with any backup event path for the same logical update.
-- `event_type` (`string`) - e.g. `MessageCreated`, `WorkspaceMemberRemoved`, `WorkspaceChannelCreated`.
+- `delivery_id` (`uuid/text`) - stable delivery identifier shared with any backup event path for the same logical update.
 - `target_kind` (`string`) - e.g. `workspace_channel`, `direct_message`, `workspace_user`.
 - `target_id` (`string`) - channel id, direct conversation id, or user id depending on target kind.
-- `payload` (`bytes` or structured message`) - event-specific fields.
+- `payload` (`oneof`) - one of `message_created`, `message_edited`, or `message_deleted`.
 - `occurred_at` (`timestamp`)
 
 **Response fields**
@@ -38,11 +37,11 @@ Realtime exposes hot-path delivery methods used after durable writes already suc
 
 **Contract notes**
 
-- Used only after chat has durably committed the channel message.
+- Used only after chat has durably committed the message.
 - Targets currently connected sessions that should already have access to the target through previously converged state.
 - Best-effort delivery failure must not cause chat to roll back the committed message.
 - RabbitMQ `MessageCreated` consumption remains the backup event path for replay or missed connected recipients.
-- If the same logical update later arrives from RabbitMQ with the same `event_id`, realtime or the client may dedupe it.
+- If the same logical update later arrives from RabbitMQ with the same `delivery_id`, realtime or the client may dedupe it.
 
 ### `DisconnectActorSessions`
 

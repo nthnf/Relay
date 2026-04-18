@@ -100,7 +100,7 @@ Semantic rules:
 ## Delivery Semantics State
 
 - Realtime may observe the same logical update from both direct gRPC fanout and RabbitMQ backup delivery.
-- Duplicate websocket deliveries are allowed in rare races; the logical delivery key is `event_id`.
+- Duplicate websocket deliveries are allowed in rare races; the logical delivery key is `delivery_id`.
 - For message creates, ordering is authoritative by chat-assigned `target_message_seq` inside one channel or one direct conversation.
 - Realtime does not own full reconnect catch-up state; durable history reload after reconnect belongs to chat/bootstrap read paths.
 

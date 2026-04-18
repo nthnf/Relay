@@ -1,6 +1,6 @@
 ## Persistence Scope
 
-Chat owns message-write state plus minimal direct-message conversation state in v1: message bodies, edit history, soft-delete state, reactions, direct conversations, and direct-conversation participants. Other services must use chat gRPC or chat events instead of reading these tables directly.
+Chat owns message-write state plus minimal direct-message conversation state in v1: message bodies, edit history, soft-delete state, direct conversations, and direct-conversation participants. Other services must use chat gRPC or chat events instead of reading these tables directly.
 
 ## Direct Message Scope
 
@@ -100,30 +100,9 @@ Semantic rules:
 - Editing updates `chat_message.body`, `last_edited_at`, and `last_edited_by_user_id` in the same transaction that inserts the new edit-history row.
 - Deleted messages are not edited in v1; edit attempts after delete should fail or return a documented conflict.
 
-### `chat_message_reaction`
-
-Current reaction membership for a message.
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `message_id` | `uuid` | Part of the composite key. |
-| `reaction_key` | `text` | Contracted reaction token such as a Unicode emoji or application-defined key. |
-| `user_id` | `uuid` | Identity-owned reacting user reference, part of the composite key. |
-| `created_at` | `timestamptz` | Time the reaction was added. |
-| `removed_at` | `timestamptz null` | Null while active if soft-retained for audit/idempotency. |
-
-Semantic rules:
-
-- Reaction uniqueness is `(message_id, reaction_key, user_id)`; chat must never persist two active identical reactions from the same user on the same message.
-- `AddReaction` should be idempotent when the active reaction already exists.
-- `RemoveReaction` should mark or remove the matching row in a way that preserves idempotent repeated removals.
-- Reactions attach to the durable message row, not to edit-history rows.
-- Reactions to deleted messages are rejected in v1.
-
 ## Relations
 
 - `chat_message_edit.message_id -> chat_message.message_id`
-- `chat_message_reaction.message_id -> chat_message.message_id`
 - `direct_conversation_member.direct_conversation_id -> direct_conversation.direct_conversation_id`
 - `chat_message.direct_conversation_id -> direct_conversation.direct_conversation_id`
 - `chat_message.(channel_id, workspace_id)` references workspace-owned channel context by value only when the target kind is `workspace_channel`; it is not a cross-database foreign key.
@@ -137,15 +116,13 @@ Semantic rules:
 - Unique partial index on `(author_user_id, direct_conversation_id, client_message_id)` where `client_message_id IS NOT NULL AND direct_conversation_id IS NOT NULL` enforces DM `CreateMessage` idempotency.
 - Unique constraint on `direct_conversation.pair_key` enforces that only one 1:1 `direct_conversation` exists for a given unordered user pair in v1.
 - Unique constraint on `(message_id, edit_version)` preserves ordered edit history.
-- Unique active-reaction constraint on `(message_id, reaction_key, user_id)` preserves per-user reaction uniqueness.
-
 ## Cross-Service References
 
 - `workspace` owns `workspace_id` and `channel_id`; chat references them for authorization context and event payloads but does not own membership or channel metadata.
-- `identity` owns `author_user_id`, `created_by_user_id`, `editor_user_id`, `deleted_by_user_id`, `last_edited_by_user_id`, and `user_id` participant or reaction references.
+- `identity` owns `author_user_id`, `created_by_user_id`, `editor_user_id`, `deleted_by_user_id`, `last_edited_by_user_id`, and `user_id` participant references.
 - External application servers call chat through Envoy Gateway; chat must not trust arbitrary caller-supplied actor identity and must authorize from Envoy-validated access-token context at its own boundary.
 - Chat authorizes direct-message reads and writes from `direct_conversation_member` rows it owns.
-- `realtime` receives best-effort synchronous `PublishEvent` calls after durable writes and also consumes durable chat events for repair or catch-up behavior.
+- `realtime` receives best-effort synchronous `DeliverMessage` calls after durable writes and also consumes durable chat events for repair or catch-up behavior.
 - `bootstrap` and other downstream consumers materialize projections from durable chat events rather than querying chat tables directly.
 - Chat inserts integration events into its local `outbox_event` table in the same transaction as the source write.
 
@@ -154,5 +131,4 @@ Semantic rules:
 - `chat_message` rows are retained after soft delete in v1 to preserve ordered history, idempotency, and replay context.
 - `direct_conversation` and `direct_conversation_member` rows are retained as durable DM routing and authorization state in v1.
 - `chat_message_edit` is append-only and retained as durable edit history unless a later retention policy explicitly supersedes it.
-- `chat_message_reaction` may be soft-retained for audit and idempotency, but only active reactions should appear in user-facing reads.
 - Any future purge policy must preserve the contract that durable downstream consumers can reconcile from previously published events even after hot data ages out.

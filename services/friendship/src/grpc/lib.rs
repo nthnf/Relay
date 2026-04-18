@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::entity::user_account;
 
-use super::ACTOR_USER_ID_METADATA;
+pub(super) const ACTOR_USER_ID_METADATA: &str = "x-user-id";
 
 pub(super) fn actor_user_id<T>(request: &Request<T>) -> Result<Uuid, Status> {
     let raw = request

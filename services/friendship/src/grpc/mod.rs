@@ -11,5 +11,3 @@ pub mod remove_friend;
 pub mod unblock_user;
 
 pub use handler::Handler as FriendshipServer;
-
-pub(super) const ACTOR_USER_ID_METADATA: &str = "x-user-id";

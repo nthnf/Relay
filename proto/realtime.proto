@@ -5,20 +5,54 @@ package relay.realtime;
 import "google/protobuf/timestamp.proto";
 
 service RealtimeService {
-  rpc PublishEvent(PublishEventRequest) returns (PublishEventResponse);
+  rpc DeliverMessage(DeliverMessageRequest) returns (DeliverMessageResponse);
   rpc DisconnectActorSessions(DisconnectActorSessionsRequest) returns (DisconnectActorSessionsResponse);
 }
 
-message PublishEventRequest {
-  string event_id = 1;
-  string event_type = 2;
-  string target_kind = 3;
-  string target_id = 4;
-  bytes payload = 5;
-  google.protobuf.Timestamp occurred_at = 6;
+enum DeliverTargetKind {
+  TARGET_KIND_UNSPECIFIED = 0;
+  DIRECT_MESSAGE = 1;
+  WORKSPACE_CHANNEL = 2;
 }
 
-message PublishEventResponse {
+message DeliverMessageRequest {
+  string delivery_id = 1;
+  DeliverTargetKind target_kind = 2;
+  string target_id = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+
+  oneof payload {
+    MessageCreatedPayload message_created = 10;
+    MessageEditedPayload message_edited = 11;
+    MessageDeletedPayload message_deleted = 12;
+  }
+}
+
+message MessageCreatedPayload {
+  string message_id = 1;
+  string author_user_id = 2;
+  string body = 3;
+  int64 target_message_seq = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message MessageEditedPayload {
+  string message_id = 1;
+  string editor_user_id = 2;
+  string body = 3;
+  int32 edit_version = 4;
+  int64 target_message_seq = 5;
+  google.protobuf.Timestamp edited_at = 6;
+}
+
+message MessageDeletedPayload {
+  string message_id = 1;
+  string deleted_by_user_id = 2;
+  int64 target_message_seq = 3;
+  google.protobuf.Timestamp deleted_at = 4;
+}
+
+message DeliverMessageResponse {
   bool accepted = 1;
   int32 attempted_recipient_count = 2;
   int32 delivered_session_count = 3;

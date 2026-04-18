@@ -1,6 +1,6 @@
 ## Purpose
 
-Chat owns durable message writes and message-history state for both workspace channels and direct-message conversations in v1. It is the source of truth for messages, edits, deletes, reactions, and minimal DM conversation metadata when called by external application servers through Envoy Gateway, while using a direct synchronous notification to `realtime` only for low-latency message-create fanout after durable write success.
+Chat owns durable message writes and message-history state for both workspace channels and direct-message conversations in v1. It is the source of truth for messages, edits, deletes, and minimal DM conversation metadata when called by external application servers through Envoy Gateway, while using a direct synchronous notification to `realtime` only for low-latency message-create fanout after durable write success.
 
 ## Owned Responsibilities
 
@@ -8,10 +8,10 @@ Chat owns durable message writes and message-history state for both workspace ch
 - Create and look up 1:1 direct-message conversations with stable `direct_conversation_id` values.
 - Enforce one durable 1:1 conversation per unordered user pair using a canonical `pair_key`.
 - Enforce retry-safe message creation when `client_message_id` is supplied.
-- Persist message edits, soft deletes, and reaction state.
+- Persist message edits and soft deletes.
 - Serve bounded message-history reads for channels and direct-message conversations.
 - Insert matching `outbox_event` rows in the same transaction as message-domain writes.
-- Call `realtime.PublishEvent` synchronously after successful durable message-create writes so connected clients can update with low latency.
+- Call `realtime.DeliverMessage` synchronously after successful durable message-create writes so connected clients can update with low latency.
 
 ## App Open Flow
 
@@ -29,13 +29,13 @@ Chat owns durable message writes and message-history state for both workspace ch
 
 ## Dependencies
 
-- **external application server through Envoy Gateway** for authenticated send, edit, delete, history, and reaction commands routed to chat gRPC.
+- **external application server through Envoy Gateway** for authenticated send, edit, delete, and history commands routed to chat gRPC.
 - **workspace** for synchronous channel and membership authorization checks where the chat write path must confirm actor access to the target channel.
 - **identity** as the owner of stable `user_id` references used for direct-conversation participants and message actors.
 - **realtime** for best-effort synchronous low-latency fanout after a durable message-create write succeeds.
 - **RabbitMQ** for durable cold-path publication of chat events.
 - **outbox worker sidecar** for polling local `outbox_event` rows and publishing them.
-- **Postgres** as the service-owned source of truth for messages, edit history, and reactions.
+- **Postgres** as the service-owned source of truth for messages and edit history.
 - **bootstrap** and other downstream consumers for projection materialization from durable chat events.
 
 ## Storage
@@ -55,8 +55,6 @@ Chat owns durable message writes and message-history state for both workspace ch
 - `ListChannelMessages`
 - `GetOrCreateDirectConversation`
 - `ListDirectConversationMessages`
-- `AddReaction`
-- `RemoveReaction`
 
 See `grpc.md` for request, response, and write-path rules.
 
@@ -65,8 +63,6 @@ See `grpc.md` for request, response, and write-path rules.
 - `MessageCreated`
 - `MessageEdited`
 - `MessageDeleted`
-- `MessageReactionAdded`
-- `MessageReactionRemoved`
 
 See `events.md` for payload and publication rules.
 
@@ -74,8 +70,8 @@ See `events.md` for payload and publication rules.
 
 - Chat remains the durable source of truth for message acceptance and persisted history.
 - Workspace continues to own workspace membership and channel metadata, while chat owns direct-message conversation metadata and participant rows.
-- After a message-create write commits successfully, chat may synchronously call `realtime.PublishEvent` so connected clients can receive low-latency fanout over existing websocket subscriptions.
-- Edits, deletes, and reactions converge through durable chat events in v1 rather than a direct synchronous `chat -> realtime` hot path.
+- After a message-create write commits successfully, chat may synchronously call `realtime.DeliverMessage` so connected clients can receive low-latency fanout over existing websocket subscriptions.
+- Edits and deletes converge through durable chat events in v1 rather than a direct synchronous `chat -> realtime` hot path.
 - Before accepting a write or history read, chat must validate channel existence and actor access against workspace-owned membership and channel state.
 - Synchronous fanout is best-effort for latency only; a failed notify must not roll back or invalidate an already committed chat write.
 - Durable recovery and downstream convergence come from `outbox_event` publication to RabbitMQ, not from the synchronous notify path.

@@ -1,6 +1,6 @@
 ## gRPC Service Scope
 
-Chat exposes hot-path message-write commands, bounded channel and direct-message history reads, reaction mutations, and minimal 1:1 DM conversation lifecycle reads/writes. External application servers through Envoy Gateway are the primary callers for end-user send, edit, delete, history, reaction, and DM-open flows.
+Chat exposes hot-path message-write commands, bounded channel and direct-message history reads, and minimal 1:1 DM conversation lifecycle reads/writes. External application servers through Envoy Gateway are the primary callers for end-user send, edit, delete, history, and DM-open flows.
 
 ## Shared Contract Rules
 
@@ -10,7 +10,7 @@ Chat exposes hot-path message-write commands, bounded channel and direct-message
 - Chat enforces chat-local invariants and must validate channel access against `workspace` before accepting workspace-channel writes or history reads.
 - Chat authorizes direct-message writes and reads through `direct_conversation_member` rows it owns.
 - Domain writes and matching `outbox_event` inserts happen in the same transaction.
-- Chat remains the durable message-write authority; synchronous `realtime.PublishEvent` calls for message-create fanout happen only after durable write success.
+- Chat remains the durable message-write authority; synchronous `realtime.DeliverMessage` calls for message-create fanout happen only after durable write success.
 - A `realtime` notify failure must not roll back an already committed message-create write.
 - V1 direct messages are 1:1 only; group DMs are not defined here.
 
@@ -48,7 +48,7 @@ Chat exposes hot-path message-write commands, bounded channel and direct-message
 - Store `client_message_id` on `chat_message` when supplied.
 - On duplicate retry for an existing durable message with the same idempotency key, return the original message response and do not create another row.
 - Duplicate retry must not publish another `MessageCreated` event.
-- After the transaction commits successfully, synchronously call `realtime.PublishEvent` as a downstream side effect for low-latency fanout.
+- After the transaction commits successfully, synchronously call `realtime.DeliverMessage` as a downstream side effect for low-latency fanout.
 - The synchronous callout is best-effort: chat returns durable write success even if the post-commit notify fails, with RabbitMQ plus `outbox_event` remaining the recovery path.
 
 ### `EditMessage`
@@ -179,52 +179,3 @@ Chat exposes hot-path message-write commands, bounded channel and direct-message
 - Order results by `target_message_seq` descending for recent-history pagination unless a later doc revision defines otherwise.
 - Use `target_message_seq` as the pagination cursor because it is conversation-scoped, monotonic, and stable under edits.
 - Reads return current message state; detailed edit history is internal unless later exposed explicitly.
-
-### `AddReaction`
-
-**Main caller:** external application server through Envoy Gateway
-
-**Request fields**
-
-- `message_id` (`uuid`)
-- `reaction_key` (`string`)
-
-**Response fields**
-
-- `message_id` (`uuid`)
-- `reaction_key` (`string`)
-- `user_id` (`uuid`)
-- `created_at` (`timestamp`)
-
-**Contract notes**
-
-- Require the authenticated actor to have access to the parent message target.
-- The parent message may belong to either a workspace channel or a direct conversation; chat must authorize reaction changes against the owning target.
-- Insert or reactivate the unique `(message_id, reaction_key, user_id)` row and insert `MessageReactionAdded` into `outbox_event` in one transaction.
-- This method is idempotent for an already active identical reaction.
-- Reaction adds converge through durable event publication only in v1; there is no direct synchronous `chat -> realtime` reaction fanout contract.
-
-### `RemoveReaction`
-
-**Main caller:** external application server through Envoy Gateway
-
-**Request fields**
-
-- `message_id` (`uuid`)
-- `reaction_key` (`string`)
-
-**Response fields**
-
-- `message_id` (`uuid`)
-- `reaction_key` (`string`)
-- `user_id` (`uuid`)
-- `removed` (`bool`)
-- `removed_at` (`timestamp optional`)
-
-**Contract notes**
-
-- Remove or deactivate only the authenticated actor's own matching reaction unless a later privileged moderation path is documented.
-- The parent message may belong to either a workspace channel or a direct conversation; chat must authorize reaction changes against the owning target.
-- This method is idempotent: if no active matching reaction exists, return `removed = false`.
-- Persist the reaction removal and matching `MessageReactionRemoved` outbox row in one transaction.
-- Reaction removals converge through durable event publication only in v1; there is no direct synchronous `chat -> realtime` reaction fanout contract.

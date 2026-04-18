@@ -2,6 +2,12 @@
 
 Realtime owns websocket connection handling, low-latency fanout to connected clients, online/offline presence state, and selected connected-session control flows for external application callers routed through Envoy Gateway. It is a delivery service, not the durable authority for chat messages or workspace membership.
 
+## Runtime
+
+- `REDIS_URL` for presence store.
+- `WS_BIND_ADDR` for websocket listener, default `0.0.0.0:8080`.
+- `GRPC_BIND_ADDR` for gRPC listener, default `0.0.0.0:50051`.
+
 ## Owned Responsibilities
 
 - Accept and manage authenticated websocket sessions for connected clients.
@@ -43,7 +49,7 @@ Example:
 ## Dependencies
 
 - **external application server through Envoy Gateway** for authenticated websocket upgrade routing and session context forwarding.
-- **chat** for synchronous low-latency `PublishEvent` fanout calls after durable writes commit.
+- **chat** for synchronous low-latency `DeliverMessage` fanout calls after durable writes commit.
 - **workspace** as the owner of durable membership and channel-change events consumed for connected-client refresh and session eviction.
 - **RabbitMQ** for durable backup and recovery inputs when direct fanout is unavailable or delayed.
 - **Redis** as the primary v1 store for online/offline presence state and lightweight session-presence coordination.
@@ -59,7 +65,7 @@ Example:
 
 ## gRPC Surface
 
-- `PublishEvent`
+- `DeliverMessage`
 - `DisconnectActorSessions`
 
 See `grpc.md` for request, response, caller, and latency rules.
@@ -75,10 +81,10 @@ See `events.md` for payload and handling rules.
 
 ## Latency Model
 
-- `chat -> realtime` gRPC `PublishEvent` fanout is low-latency path for already committed durable writes.
+- `chat -> realtime` gRPC `DeliverMessage` fanout is low-latency path for already committed durable writes.
 - The synchronous gRPC path is best-effort for delivery speed only; a realtime failure must not invalidate a committed chat write.
 - RabbitMQ event consumption is the backup and recovery path for missed channel or DM fanout while a connection remains active, plus downstream convergence after transient direct-path failure.
-- Rare duplicate websocket deliveries are allowed during failover or race conditions; clients should dedupe using `event_id`.
+- Rare duplicate websocket deliveries are allowed during failover or race conditions; clients should dedupe using `delivery_id`.
 - Chat-assigned target-scoped sequence remains authoritative for message-create ordering inside one channel or one direct conversation.
 - Realtime does not promise full per-session replay after reconnect; once a client reconnects, full catch-up belongs to chat/bootstrap history reads.
 - Presence is lower urgency than message delivery correctness: Redis-backed online/offline updates may converge with slightly more delay than message fanout.
