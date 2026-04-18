@@ -215,7 +215,7 @@ where
         return Ok(());
     };
 
-    let friend_request_id = pending_request.friend_request_id;
+    let friend_request_id = pending_request.request_id;
     let mut active_request = pending_request.into_active_model();
     active_request.status = Set("canceled_by_block".to_string());
     active_request.resolved_at = Set(Some(now.into()));

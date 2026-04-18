@@ -9,7 +9,7 @@ pub struct Model {
     pub user_id: Uuid,
     #[sea_orm(primary_key, auto_increment = false)]
     pub friend_user_id: Uuid,
-    pub friend_request_id: Uuid,
+    pub request_id: Uuid,
     pub accepted_at: DateTimeWithTimeZone,
     pub created_at: DateTimeWithTimeZone,
 }
@@ -18,8 +18,8 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(
         belongs_to = "super::friend_request::Entity",
-        from = "Column::FriendRequestId",
-        to = "super::friend_request::Column::FriendRequestId",
+        from = "Column::RequestId",
+        to = "super::friend_request::Column::RequestId",
         on_update = "NoAction",
         on_delete = "Cascade"
     )]

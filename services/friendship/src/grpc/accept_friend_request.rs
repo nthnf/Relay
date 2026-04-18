@@ -97,14 +97,14 @@ impl Handler {
                     let edge_1 = friendship_edge::ActiveModel {
                         user_id: Set(actor_user_id),
                         friend_user_id: Set(requester_id),
-                        friend_request_id: Set(friend_request_id),
+                        request_id: Set(friend_request_id),
                         accepted_at: Set(now.into()),
                         created_at: Set(now.into()),
                     };
                     let edge_2 = friendship_edge::ActiveModel {
                         user_id: Set(requester_id),
                         friend_user_id: Set(actor_user_id),
-                        friend_request_id: Set(friend_request_id),
+                        request_id: Set(friend_request_id),
                         accepted_at: Set(now.into()),
                         created_at: Set(now.into()),
                     };

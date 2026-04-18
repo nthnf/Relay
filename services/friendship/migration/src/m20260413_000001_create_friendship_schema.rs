@@ -32,11 +32,7 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(FriendRequest::Table)
                     .if_not_exists()
-                    .col(
-                        uuid(FriendRequest::FriendRequestId)
-                            .not_null()
-                            .primary_key(),
-                    )
+                    .col(uuid(FriendRequest::RequestId).not_null().primary_key())
                     .col(uuid(FriendRequest::RequesterUserId).not_null())
                     .col(uuid(FriendRequest::AddresseeUserId).not_null())
                     .col(text(FriendRequest::Status).not_null())
@@ -98,7 +94,7 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(uuid(FriendshipEdge::UserId).not_null())
                     .col(uuid(FriendshipEdge::FriendUserId).not_null())
-                    .col(uuid(FriendshipEdge::FriendRequestId).not_null())
+                    .col(uuid(FriendshipEdge::RequestId).not_null())
                     .col(
                         timestamp_with_time_zone(FriendshipEdge::AcceptedAt)
                             .not_null()
@@ -117,8 +113,8 @@ impl MigrationTrait for Migration {
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-friendship-edge-friend-request-id")
-                            .from(FriendshipEdge::Table, FriendshipEdge::FriendRequestId)
-                            .to(FriendRequest::Table, FriendRequest::FriendRequestId)
+                            .from(FriendshipEdge::Table, FriendshipEdge::RequestId)
+                            .to(FriendRequest::Table, FriendRequest::RequestId)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
@@ -267,7 +263,7 @@ impl MigrationTrait for Migration {
 #[derive(DeriveIden)]
 enum FriendRequest {
     Table,
-    FriendRequestId,
+    RequestId,
     RequesterUserId,
     AddresseeUserId,
     Status,
@@ -290,7 +286,7 @@ enum FriendshipEdge {
     Table,
     UserId,
     FriendUserId,
-    FriendRequestId,
+    RequestId,
     AcceptedAt,
     CreatedAt,
 }

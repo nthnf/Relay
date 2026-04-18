@@ -124,7 +124,7 @@ impl Handler {
                     }
 
                     let friend_request = friend_request::ActiveModel {
-                        friend_request_id: Set(friend_request_id),
+                        request_id: Set(friend_request_id),
                         requester_user_id: Set(actor_user_id),
                         addressee_user_id: Set(user_id),
                         status: Set("pending".to_string()),

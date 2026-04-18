@@ -38,7 +38,7 @@ impl Handler {
                     let mut query = friend_request::Entity::find()
                         .filter(friend_request::Column::Status.eq("pending"))
                         .order_by_desc(friend_request::Column::CreatedAt)
-                        .order_by_desc(friend_request::Column::FriendRequestId)
+                        .order_by_desc(friend_request::Column::RequestId)
                         .limit(page_size + 1);
 
                     match direction.as_str() {
@@ -71,8 +71,7 @@ impl Handler {
                                             friend_request::Column::CreatedAt.eq(cursor.created_at),
                                         )
                                         .add(
-                                            friend_request::Column::FriendRequestId
-                                                .lt(cursor.friend_request_id),
+                                            friend_request::Column::RequestId.lt(cursor.request_id),
                                         ),
                                 ),
                         );
@@ -98,7 +97,7 @@ impl Handler {
                         requests: rows
                             .into_iter()
                             .map(|row| FriendRequestRecord {
-                                friend_request_id: row.friend_request_id.to_string(),
+                                friend_request_id: row.request_id.to_string(),
                                 requester_user_id: row.requester_user_id.to_string(),
                                 addressee_user_id: row.addressee_user_id.to_string(),
                                 status: row.status,
@@ -124,19 +123,19 @@ impl Handler {
 
 struct RequestCursor {
     created_at: chrono::DateTime<Utc>,
-    friend_request_id: Uuid,
+    request_id: Uuid,
 }
 
 fn encode_page_token(cursor: &friend_request::Model) -> String {
     format!(
         "{}|{}",
         cursor.created_at.with_timezone(&Utc).to_rfc3339(),
-        cursor.friend_request_id
+        cursor.request_id
     )
 }
 
 fn decode_page_token(page_token: &str) -> Result<RequestCursor, Status> {
-    let (created_at, friend_request_id) = page_token
+        let (created_at, request_id) = page_token
         .split_once('|')
         .ok_or_else(|| Status::invalid_argument("Invalid page token"))?;
 
@@ -144,11 +143,11 @@ fn decode_page_token(page_token: &str) -> Result<RequestCursor, Status> {
         .map_err(|_| Status::invalid_argument("Invalid page token"))?
         .with_timezone(&Utc);
 
-    let friend_request_id = Uuid::parse_str(friend_request_id)
-        .map_err(|_| Status::invalid_argument("Invalid page token"))?;
+        let request_id = Uuid::parse_str(request_id)
+            .map_err(|_| Status::invalid_argument("Invalid page token"))?;
 
     Ok(RequestCursor {
         created_at,
-        friend_request_id,
+        request_id,
     })
 }
