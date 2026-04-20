@@ -2,7 +2,7 @@ extern crate workspace as workspace_crate;
 
 use relay_proto::workspace::workspace_service_client::WorkspaceServiceClient;
 use relay_proto::workspace::{CreateWorkspaceRequest, GetWorkspaceRequest};
-use sea_orm::Database;
+use sea_orm::{Database, EntityTrait};
 use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
@@ -11,6 +11,7 @@ use tonic::{metadata::MetadataValue, transport::Server, Request};
 use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
+use workspace_crate::entity::user_snapshot;
 use workspace_crate::grpc::WorkspaceServer;
 
 const ACTOR_USER_ID_METADATA: &str = "x-user-id";
@@ -19,6 +20,8 @@ const ACTOR_USER_ID_METADATA: &str = "x-user-id";
 async fn get_workspace_returns_summary_for_member() -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
+
+    insert_user_snapshot(&env.db, actor_user_id).await?;
 
     let created = env
         .client
@@ -62,6 +65,9 @@ async fn get_workspace_rejects_non_member() -> Result<(), Box<dyn std::error::Er
     let actor_user_id = Uuid::new_v4();
     let outsider_user_id = Uuid::new_v4();
 
+    insert_user_snapshot(&env.db, actor_user_id).await?;
+    insert_user_snapshot(&env.db, outsider_user_id).await?;
+
     let created = env
         .client
         .clone()
@@ -95,6 +101,7 @@ async fn get_workspace_rejects_non_member() -> Result<(), Box<dyn std::error::Er
 
 struct TestEnv {
     _postgres: testcontainers_modules::testcontainers::ContainerAsync<Postgres>,
+    db: sea_orm::DatabaseConnection,
     client: WorkspaceServiceClient<tonic::transport::Channel>,
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
     server_task: tokio::task::JoinHandle<Result<(), tonic::transport::Error>>,
@@ -131,6 +138,7 @@ impl TestEnv {
 
         Ok(Self {
             _postgres: postgres,
+            db,
             client,
             shutdown: Some(shutdown_tx),
             server_task,
@@ -170,4 +178,24 @@ fn actor_request<T>(user_id: Uuid, request: T) -> Request<T> {
             MetadataValue::try_from(user_id.to_string()).expect("metadata"),
         );
     request
+}
+
+async fn insert_user_snapshot(
+    db: &sea_orm::DatabaseConnection,
+    user_id: Uuid,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let now = chrono::Utc::now();
+    workspace_crate::entity::user_snapshot::Entity::insert(user_snapshot::ActiveModel {
+        user_id: sea_orm::Set(user_id),
+        email_verified: sea_orm::Set(false),
+        username: sea_orm::Set(format!("user-{user_id}")),
+        display_name: sea_orm::Set("Test User".to_string()),
+        avatar_url: sea_orm::Set(None),
+        created_at: sea_orm::Set(now.into()),
+        updated_at: sea_orm::Set(now.into()),
+    })
+    .exec(db)
+    .await?;
+
+    Ok(())
 }

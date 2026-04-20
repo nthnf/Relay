@@ -4,21 +4,25 @@ Workspace owns workspace-write state only: workspace metadata, memberships, role
 
 ## Replicated User Model
 
-### `user_account`
+### `user_snapshot`
 
-Workspace-local copy of identity account existence and email verification state.
+Workspace-local copy of identity account existence, verification state, and profile snapshot.
 
 | Column           | Type          | Notes                                              |
 | ---------------- | ------------- | -------------------------------------------------- |
 | `user_id`        | `uuid`        | Primary key. Stable identity-owned user reference. |
 | `email_verified` | `bool`        | Mirrored from identity email verification state.   |
+| `username`       | `text`        | Mirrored username snapshot.                        |
+| `display_name`   | `text`        | Mirrored display name snapshot.                    |
+| `avatar_url`     | `text null`   | Mirrored avatar snapshot.                          |
 | `created_at`     | `timestamptz` | Mirror insert time.                                |
 | `updated_at`     | `timestamptz` | Last mirrored update time.                         |
 
 Semantic rules:
 
 - Workspace uses this table only for target-user existence validation on write paths.
-- `UserRegistered` seeds row.
+- `UserRegistered` seeds row with profile fields.
+- `UserProfileUpdated` refreshes username/display_name/avatar_url.
 - `UserEmailVerified` flips `email_verified` true.
 
 ## Core Tables
@@ -218,12 +222,21 @@ Semantic rules:
 - `workspace_member_role.workspace_role_id -> workspace_role.workspace_role_id`
 - `workspace_invitation.workspace_id -> workspace.workspace_id`
 - `workspace_channel.workspace_id -> workspace.workspace_id`
+- `workspace.owner_user_id -> user_snapshot.user_id`
+- `workspace_member.user_id -> user_snapshot.user_id`
+- `workspace_member.added_by_user_id -> user_snapshot.user_id`
+- `workspace_member_role.user_id -> user_snapshot.user_id`
+- `workspace_member_role.assigned_by_user_id -> user_snapshot.user_id`
+- `workspace_invitation.issued_to_user_id -> user_snapshot.user_id`
+- `workspace_invitation.issued_by_user_id -> user_snapshot.user_id`
+- `workspace_invite_link.created_by_user_id -> user_snapshot.user_id`
+- `workspace_channel.created_by_user_id -> user_snapshot.user_id`
 
 ## Cross-Service References
 
 - `identity` owns every `user_id` referenced by `owner_user_id`, `user_id`, `issued_to_user_id`, `issued_by_user_id`, `added_by_user_id`, `assigned_by_user_id`, and `created_by_user_id`.
-- Workspace consumes identity `UserRegistered` and `UserEmailVerified` events to maintain local `user_account` mirror rows for write-path validation.
-- Workspace validates write-path target users through local `user_account` rows before issuing invitations or directly adding members.
+- Workspace consumes identity `UserRegistered`, `UserProfileUpdated`, and `UserEmailVerified` events to maintain local `user_snapshot` mirror rows for write-path validation.
+- Workspace validates write-path target users through local `user_snapshot` rows before issuing invitations or directly adding members.
 - Invitation issuance stays app-scoped; workspace does not resolve recipient email for v1.
 - Bearer invite links are separate from per-user invitations and do not require email delivery.
 - External application servers call workspace through Envoy Gateway; workspace does not trust arbitrary caller-supplied actor identity and must authorize from Envoy-validated access-token context at its own boundary.

@@ -7,16 +7,14 @@ use uuid::Uuid;
 
 use crate::{
     entity::{
-        outbox_event, workspace, workspace_invitation, workspace_member, workspace_member_role,
-        workspace_role,
+        workspace, workspace_invitation, workspace_member, workspace_member_role, workspace_role,
     },
-    events::WorkspaceInvitationIssuedPayload,
     grpc::lib::user_account_exists,
 };
 
 use super::handler::Handler;
 use super::lib::permission;
-use relay_types::{actor_user_id, payload_value, to_timestamp};
+use relay_types::actor_user_id;
 
 impl Handler {
     pub(super) async fn issue_invitation(
@@ -102,13 +100,19 @@ impl Handler {
                         return Err(Status::not_found("Member role not found"));
                     }
 
-                    if !member_role_joins.iter().any(|(_, role)| {
-                        role.as_ref()
-                            .map(|role| {
-                                permission::has(role.permissions, permission::MEMBER_INVITE)
-                            })
-                            .unwrap_or(false)
-                    }) {
+                    let mut allowed = false;
+                    for (_, role) in &member_role_joins {
+                        let Some(role) = role.as_ref() else {
+                            return Err(Status::internal("Internal Server Error"));
+                        };
+                        let perms = permission::from_db(role.permissions)?;
+                        if permission::has(perms, permission::MEMBER_INVITE) {
+                            allowed = true;
+                            break;
+                        }
+                    }
+
+                    if !allowed {
                         return Err(Status::permission_denied("Insufficient permissions"));
                     };
 

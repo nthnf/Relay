@@ -13,8 +13,8 @@ use uuid::Uuid;
 use migration::{Migrator, MigratorTrait};
 use workspace_crate::{
     entity::{
-        outbox_event, workspace, workspace_channel, workspace_member, workspace_member_role,
-        workspace_role,
+        outbox_event, user_snapshot, workspace, workspace_channel, workspace_member,
+        workspace_member_role, workspace_role,
     },
     grpc::WorkspaceServer,
 };
@@ -26,6 +26,8 @@ async fn create_workspace_persists_workspace_member_channel_roles_and_events()
 -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
+
+    insert_user_snapshot(&env.db, actor_user_id).await?;
 
     let response = env
         .client
@@ -205,4 +207,24 @@ fn actor_request<T>(user_id: Uuid, request: T) -> Request<T> {
         MetadataValue::try_from(user_id.to_string()).expect("metadata"),
     );
     request
+}
+
+async fn insert_user_snapshot(
+    db: &sea_orm::DatabaseConnection,
+    user_id: Uuid,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let now = chrono::Utc::now();
+    workspace_crate::entity::user_snapshot::Entity::insert(user_snapshot::ActiveModel {
+        user_id: sea_orm::Set(user_id),
+        email_verified: sea_orm::Set(false),
+        username: sea_orm::Set(format!("user-{user_id}")),
+        display_name: sea_orm::Set("Test User".to_string()),
+        avatar_url: sea_orm::Set(None),
+        created_at: sea_orm::Set(now.into()),
+        updated_at: sea_orm::Set(now.into()),
+    })
+    .exec(db)
+    .await?;
+
+    Ok(())
 }

@@ -9,11 +9,11 @@ Friendship owns friend requests, accepted friendships, user blocks, and the rela
 - Enforce blocking precedence over requests and friendships.
 - Remove friendships when a user explicitly removes a friend or when a new block invalidates an existing friendship.
 - Publish durable relationship events through the local `outbox_event` table.
-- Mirror identity user-account rows into friendship-local `user_account` read model for eventual-consistency target validation.
+- Mirror identity profile rows into friendship-local `user_snapshot` read model for eventual-consistency target validation.
 
 ## Non-Goals
 
-- Not source of truth for user accounts; `identity` owns that. Friendship keeps replicated `user_account` read model only for target-user validation.
+- Not source of truth for user accounts; `identity` owns that. Friendship keeps replicated `user_snapshot` read model only for target-user validation.
 - Serving the public HTTP edge; external application servers reach friendship through Envoy Gateway, while friendship keeps service-owned authorization.
 - Acting as the canonical UI aggregate read service; `bootstrap` owns projection-backed friend-list reads.
 - Inventing followers, groups, recommendations, or other social features outside direct bilateral relationships.
@@ -24,7 +24,7 @@ Friendship owns friend requests, accepted friendships, user blocks, and the rela
 - **RabbitMQ** for durable cold-path publication of relationship events.
 - **outbox worker sidecar** for polling local `outbox_event` rows and publishing them.
 - **Postgres** as the service-owned source of truth for requests, friendship edges, and blocks.
-- **identity** events as source for friendship-local `user_account` mirror used on write paths.
+- **identity** events as source for friendship-local `user_snapshot` mirror used on write paths.
 
 ## Storage
 
@@ -63,7 +63,7 @@ See `events.md` for payload and publication rules.
 - Accepted friendships are symmetric: v1 stores one edge per direction so reads stay user-scoped and simple.
 - Blocking takes precedence over normal friend flows. If either direction is blocked, the pair cannot create or accept a friend request.
 - Envoy-protected routes arrive with trusted actor headers such as `x-user-id` populated by identity `Authorization/Check`.
-- Friendship validates write-path target users against local replicated `user_account` rows before creating a friend request or block. Upstream callers may pre-validate, but friendship still enforces the invariant at its own boundary.
-- If local `user_account` row absent, friendship rejects the write and does not persist orphaned `friend_request`, `friendship_edge`, or `user_block` rows.
+- Friendship validates write-path target users against local replicated `user_snapshot` rows before creating a friend request or block. Upstream callers may pre-validate, but friendship still enforces the invariant at its own boundary.
+- If local `user_snapshot` row absent, friendship rejects the write and does not persist orphaned `friend_request`, `friendship_edge`, or `user_block` rows.
 - `BlockUser` removes any accepted friendship edges for the pair and clears pending requests in either direction in the same local transaction.
 - `UnblockUser` removes only the caller-owned block row; it does not restore prior friendship or pending request state.

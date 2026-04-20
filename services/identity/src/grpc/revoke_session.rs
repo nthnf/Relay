@@ -6,7 +6,7 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::entity::{outbox_event, user_session};
-use crate::event::SessionRevokedPayload;
+use crate::events::SessionRevokedPayload;
 
 use super::handler::{Handler, payload_value, to_timestamp};
 

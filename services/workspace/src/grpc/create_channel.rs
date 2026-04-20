@@ -107,7 +107,9 @@ impl Handler {
                         return Err(Status::internal("Internal Server Error"));
                     };
 
-                    if !permission::has(role.permissions, permission::CHANNEL_CREATE) {
+                    let role_permissions = permission::from_db(role.permissions)?;
+
+                    if !permission::has(role_permissions, permission::CHANNEL_CREATE) {
                         return Err(Status::permission_denied("Insufficient permissions"));
                     };
 

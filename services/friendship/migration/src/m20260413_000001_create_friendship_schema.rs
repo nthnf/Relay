@@ -9,17 +9,20 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(UserAccount::Table)
+                    .table(UserSnapshot::Table)
                     .if_not_exists()
-                    .col(uuid(UserAccount::UserId).not_null().primary_key())
-                    .col(boolean(UserAccount::EmailVerified).not_null())
+                    .col(uuid(UserSnapshot::UserId).not_null().primary_key())
+                    .col(boolean(UserSnapshot::EmailVerified).not_null())
+                    .col(text(UserSnapshot::Username).not_null())
+                    .col(text(UserSnapshot::DisplayName).not_null())
+                    .col(text_null(UserSnapshot::AvatarUrl))
                     .col(
-                        timestamp_with_time_zone(UserAccount::CreatedAt)
+                        timestamp_with_time_zone(UserSnapshot::CreatedAt)
                             .not_null()
                             .default(Expr::current_timestamp()),
                     )
                     .col(
-                        timestamp_with_time_zone(UserAccount::UpdatedAt)
+                        timestamp_with_time_zone(UserSnapshot::UpdatedAt)
                             .not_null()
                             .default(Expr::current_timestamp()),
                     )
@@ -43,6 +46,20 @@ impl MigrationTrait for Migration {
                     )
                     .col(timestamp_with_time_zone(FriendRequest::ResolvedAt).null())
                     .col(text_null(FriendRequest::ResolutionReason))
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-friend-request-requester-user-id")
+                            .from(FriendRequest::Table, FriendRequest::RequesterUserId)
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-friend-request-addressee-user-id")
+                            .from(FriendRequest::Table, FriendRequest::AddresseeUserId)
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -112,6 +129,20 @@ impl MigrationTrait for Migration {
                     )
                     .foreign_key(
                         ForeignKey::create()
+                            .name("fk-friendship-edge-user-id")
+                            .from(FriendshipEdge::Table, FriendshipEdge::UserId)
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-friendship-edge-friend-user-id")
+                            .from(FriendshipEdge::Table, FriendshipEdge::FriendUserId)
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
                             .name("fk-friendship-edge-friend-request-id")
                             .from(FriendshipEdge::Table, FriendshipEdge::RequestId)
                             .to(FriendRequest::Table, FriendRequest::RequestId)
@@ -161,6 +192,20 @@ impl MigrationTrait for Migration {
                         Index::create()
                             .col(UserBlock::BlockerUserId)
                             .col(UserBlock::BlockedUserId),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-user-block-blocker-user-id")
+                            .from(UserBlock::Table, UserBlock::BlockerUserId)
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-user-block-blocked-user-id")
+                            .from(UserBlock::Table, UserBlock::BlockedUserId)
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
                     )
                     .to_owned(),
             )
@@ -241,7 +286,7 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(Table::drop().table(UserAccount::Table).to_owned())
+            .drop_table(Table::drop().table(UserSnapshot::Table).to_owned())
             .await?;
         manager
             .drop_table(Table::drop().table(OutboxEvent::Table).to_owned())
@@ -273,10 +318,13 @@ enum FriendRequest {
 }
 
 #[derive(DeriveIden)]
-enum UserAccount {
+enum UserSnapshot {
     Table,
     UserId,
     EmailVerified,
+    Username,
+    DisplayName,
+    AvatarUrl,
     CreatedAt,
     UpdatedAt,
 }

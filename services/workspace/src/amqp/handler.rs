@@ -10,8 +10,8 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::{
-    entity::user_account,
-    events::{UserEmailVerifiedPayload, UserRegisteredPayload},
+    entity::user_snapshot,
+    events::{UserEmailVerifiedPayload, UserProfileUpdatedPayload, UserRegisteredPayload},
 };
 
 #[derive(Debug)]
@@ -33,6 +33,7 @@ impl Error for AmqpError {}
 enum IdentityEvent {
     UserRegistered(UserRegisteredPayload),
     UserEmailVerified(UserEmailVerifiedPayload),
+    UserProfileUpdated(UserProfileUpdatedPayload),
 }
 
 #[derive(Clone)]
@@ -68,6 +69,15 @@ impl Handler {
                     })?;
                 Ok(IdentityEvent::UserEmailVerified(payload))
             }
+            "identity.UserProfileUpdated" => {
+                let payload: UserProfileUpdatedPayload = serde_json::from_slice(&delivery.data)
+                    .map_err(|e| {
+                        AmqpError::Permanent(format!(
+                            "failed to parse user profile updated event: {e}"
+                        ))
+                    })?;
+                Ok(IdentityEvent::UserProfileUpdated(payload))
+            }
             other => Err(AmqpError::Permanent(format!(
                 "unknown routing key: {other}"
             ))),
@@ -80,6 +90,9 @@ impl Handler {
             IdentityEvent::UserEmailVerified(payload) => {
                 self.handle_user_email_verified(payload).await
             }
+            IdentityEvent::UserProfileUpdated(payload) => {
+                self.handle_user_profile_updated(payload).await
+            }
         }
     }
 
@@ -87,14 +100,21 @@ impl Handler {
         &self,
         payload: UserRegisteredPayload,
     ) -> Result<(), AmqpError> {
-        let UserRegisteredPayload { user_id, .. } = payload;
+        let UserRegisteredPayload {
+            user_id,
+            username,
+            display_name,
+            avatar_url,
+            ..
+        } = payload;
         let user_id = Uuid::parse_str(&user_id)
             .map_err(|_| AmqpError::Permanent("Invalid UUID".to_string()))?;
+        let now = Utc::now();
 
         self.db
             .transaction::<_, (), AmqpError>(|txn| {
                 Box::pin(async move {
-                    let existing = user_account::Entity::find_by_id(user_id)
+                    let existing = user_snapshot::Entity::find_by_id(user_id)
                         .one(txn)
                         .await
                         .map_err(|e| {
@@ -103,17 +123,29 @@ impl Handler {
                         })?;
 
                     match existing {
-                        Some(_) => Ok(()),
+                        Some(existing) => {
+                            let mut active = existing.into_active_model();
+                            active.username = Set(username);
+                            active.display_name = Set(display_name);
+                            active.avatar_url = Set(avatar_url);
+                            active.updated_at = Set(now.into());
+                            active.update(txn).await.map_err(|e| {
+                                error!(error = %e, "User account update failed");
+                                AmqpError::Transient("User account update failed".to_string())
+                            })?;
+                            Ok(())
+                        }
                         None => {
-                            let now = Utc::now();
-
-                            let user = user_account::ActiveModel {
+                            let user = user_snapshot::ActiveModel {
                                 user_id: Set(user_id),
                                 email_verified: Set(false),
+                                username: Set(username),
+                                display_name: Set(display_name),
+                                avatar_url: Set(avatar_url),
                                 created_at: Set(now.into()),
                                 updated_at: Set(now.into()),
                             };
-                            user_account::Entity::insert(user)
+                            user_snapshot::Entity::insert(user)
                                 .exec(txn)
                                 .await
                                 .map_err(|e| {
@@ -153,7 +185,7 @@ impl Handler {
         self.db
             .transaction::<_, (), AmqpError>(|txn| {
                 Box::pin(async move {
-                    let existing = user_account::Entity::find_by_id(user_id)
+                    let existing = user_snapshot::Entity::find_by_id(user_id)
                         .one(txn)
                         .await
                         .map_err(|e| {
@@ -178,14 +210,17 @@ impl Handler {
                             Ok(())
                         }
                         None => {
-                            let user = user_account::ActiveModel {
+                            let user = user_snapshot::ActiveModel {
                                 user_id: Set(user_id),
                                 email_verified: Set(true),
+                                username: Set(String::new()),
+                                display_name: Set(String::new()),
+                                avatar_url: Set(None),
                                 created_at: Set(now.into()),
                                 updated_at: Set(now.into()),
                             };
 
-                            user_account::Entity::insert(user)
+                            user_snapshot::Entity::insert(user)
                                 .exec(txn)
                                 .await
                                 .map_err(|e| {
@@ -209,6 +244,86 @@ impl Handler {
                 TransactionError::Transaction(db_err) => {
                     error!(error = %db_err, "User email verified transaction failure");
                     AmqpError::Transient("User email verified transaction failure".to_string())
+                }
+            })?;
+
+        Ok(())
+    }
+
+    async fn handle_user_profile_updated(
+        &self,
+        payload: UserProfileUpdatedPayload,
+    ) -> Result<(), AmqpError> {
+        let UserProfileUpdatedPayload {
+            user_id,
+            username,
+            display_name,
+            avatar_url,
+            ..
+        } = payload;
+        let user_id = Uuid::parse_str(&user_id)
+            .map_err(|_| AmqpError::Permanent("Invalid UUID".to_string()))?;
+        let now = Utc::now();
+
+        self.db
+            .transaction::<_, (), AmqpError>(|txn| {
+                Box::pin(async move {
+                    let existing = user_snapshot::Entity::find_by_id(user_id)
+                        .one(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "User profile updated lookup failed");
+                            AmqpError::Transient("User profile updated lookup failed".to_string())
+                        })?;
+
+                    match existing {
+                        Some(existing) => {
+                            let mut active = existing.into_active_model();
+                            active.username = Set(username);
+                            active.display_name = Set(display_name);
+                            active.avatar_url = Set(avatar_url);
+                            active.updated_at = Set(now.into());
+                            active.update(txn).await.map_err(|e| {
+                                error!(error = %e, "User profile updated failed");
+                                AmqpError::Transient("User profile updated failed".to_string())
+                            })?;
+                            Ok(())
+                        }
+                        None => {
+                            let user = user_snapshot::ActiveModel {
+                                user_id: Set(user_id),
+                                email_verified: Set(false),
+                                username: Set(username),
+                                display_name: Set(display_name),
+                                avatar_url: Set(avatar_url),
+                                created_at: Set(now.into()),
+                                updated_at: Set(now.into()),
+                            };
+
+                            user_snapshot::Entity::insert(user)
+                                .exec(txn)
+                                .await
+                                .map_err(|e| {
+                                    error!(error = %e, "User profile updated insert failed");
+                                    AmqpError::Transient(
+                                        "User profile updated insert failed".to_string(),
+                                    )
+                                })?;
+
+                            Ok(())
+                        }
+                    }
+                })
+            })
+            .await
+            .map_err(|e| match e {
+                TransactionError::Connection(db_err) => {
+                    error!(error = %db_err, "User profile updated connection failure");
+                    AmqpError::Transient("User profile updated connection failure".to_string())
+                }
+                TransactionError::Transaction(db_err) => {
+                    error!(error = %db_err, "User profile updated transaction failure");
+                    AmqpError::Transient("User profile updated transaction failure".to_string())
                 }
             })?;
 

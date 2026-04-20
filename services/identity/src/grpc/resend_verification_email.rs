@@ -8,7 +8,7 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::entity::{email_verification_token, outbox_event, user_account};
-use crate::event::VerificationEmailRequestedPayload;
+use crate::events::VerificationEmailRequestedPayload;
 
 use super::handler::{Handler, payload_value};
 

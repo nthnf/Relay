@@ -3,7 +3,7 @@
 pub mod prelude;
 
 pub mod outbox_event;
-pub mod user_account;
+pub mod user_snapshot;
 pub mod workspace;
 pub mod workspace_channel;
 pub mod workspace_invitation;

@@ -1,6 +1,6 @@
 use friendship::{
     db,
-    entity::{friend_request, friendship_edge, user_account, user_block},
+    entity::{friend_request, friendship_edge, user_snapshot, user_block},
     grpc::FriendshipServer,
 };
 use migration::{Migrator, MigratorTrait};
@@ -26,6 +26,7 @@ async fn create_friend_request_path() -> Result<(), Box<dyn std::error::Error>> 
     let actor = Uuid::new_v4();
     let target = Uuid::new_v4();
 
+    env.seed_user(actor, false).await?;
     env.seed_user(target, false).await?;
 
     let response = env
@@ -86,6 +87,7 @@ async fn accept_friend_request_path() -> Result<(), Box<dyn std::error::Error>> 
     let requester = Uuid::new_v4();
 
     env.seed_user(actor, false).await?;
+    env.seed_user(requester, false).await?;
 
     let created = env
         .client
@@ -129,6 +131,7 @@ async fn reject_friend_request_path() -> Result<(), Box<dyn std::error::Error>> 
     let requester = Uuid::new_v4();
 
     env.seed_user(actor, false).await?;
+    env.seed_user(requester, false).await?;
 
     let created = env
         .client
@@ -173,6 +176,7 @@ async fn remove_friend_path() -> Result<(), Box<dyn std::error::Error>> {
     let actor = Uuid::new_v4();
     let friend = Uuid::new_v4();
 
+    env.seed_user(actor, false).await?;
     env.seed_user(friend, false).await?;
 
     let created = env
@@ -269,6 +273,7 @@ async fn unblock_user_path() -> Result<(), Box<dyn std::error::Error>> {
     let blocker = Uuid::new_v4();
     let blocked = Uuid::new_v4();
 
+    env.seed_user(blocker, false).await?;
     env.seed_user(blocked, false).await?;
 
     env.client
@@ -306,6 +311,7 @@ async fn list_friends_path() -> Result<(), Box<dyn std::error::Error>> {
     let actor = Uuid::new_v4();
     let friend = Uuid::new_v4();
 
+    env.seed_user(actor, false).await?;
     env.seed_user(friend, false).await?;
 
     let created = env
@@ -356,6 +362,7 @@ async fn list_pending_requests_path() -> Result<(), Box<dyn std::error::Error>> 
     let requester = Uuid::new_v4();
     let addressee = Uuid::new_v4();
 
+    env.seed_user(requester, false).await?;
     env.seed_user(addressee, false).await?;
 
     env.client
@@ -451,9 +458,12 @@ impl TestEnv {
         user_id: Uuid,
         email_verified: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        user_account::ActiveModel {
+        user_snapshot::ActiveModel {
             user_id: Set(user_id),
             email_verified: Set(email_verified),
+            username: Set(format!("user-{user_id}")),
+            display_name: Set("Test User".to_string()),
+            avatar_url: Set(None),
             created_at: Set(chrono::Utc::now().into()),
             updated_at: Set(chrono::Utc::now().into()),
         }

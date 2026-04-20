@@ -7,7 +7,7 @@ Friendship exposes synchronous relationship command and bounded read contracts. 
 - Authenticated actor identity is derived from Envoy-validated access-token context; callers must not be allowed to mutate another actor's relationship state by supplying arbitrary user IDs.
 - Envoy calls identity `Authorization/Check` on protected routes, then forwards trusted actor headers such as `x-user-id` out-of-band to friendship.
 - External application callers do not supply actor identity in request payloads for end-user actions; the transport boundary or a trusted backend caller context attaches it out-of-band.
-- Friendship enforces target-user existence at its own boundary by validating write-path target IDs against local replicated `user_account` rows; this mirror is for target validation only, not for re-validating the authenticated actor header.
+- Friendship enforces target-user existence at its own boundary by validating write-path target IDs against local replicated `user_snapshot` rows; this mirror is for target validation only, not for re-validating the authenticated actor header.
 - If local replica lacks target user, friendship rejects write with not-found-style domain error and persists no relationship row for that target.
 - Blocking precedence applies to all normal friend interactions. If either direction has an active `user_block` row, `CreateFriendRequest` and `AcceptFriendRequest` must fail with a conflict-style domain error.
 - Accepted friendship is symmetric and must be created or removed as two `friendship_edge` rows in one transaction.
@@ -32,7 +32,7 @@ Friendship exposes synchronous relationship command and bounded read contracts. 
 **Contract notes**
 
 - Reject self-targeting requests.
-- Validate `target_user_id` existence through local `user_account` mirror before inserting the request row.
+- Validate `target_user_id` existence through local `user_snapshot` mirror before inserting the request row.
 - Reject if the pair is already friends.
 - Reject if a block exists in either direction.
 - Reject if a pending request already exists in either direction.
@@ -117,7 +117,7 @@ Friendship exposes synchronous relationship command and bounded read contracts. 
 **Contract notes**
 
 - Reject self-block attempts.
-- Validate `target_user_id` existence through local `user_account` mirror before creating a block row.
+- Validate `target_user_id` existence through local `user_snapshot` mirror before creating a block row.
 - Create or preserve the directional `user_block` row for `(authenticated actor, target_user_id)`.
 - If the block already exists, return `blocked = true`, `already_blocked = true`, and the original `blocked_at` timestamp without creating another row.
 - An already-blocked no-op call publishes no `UserBlocked`, `FriendRequestCanceledByBlock`, or `FriendshipRemoved` event because there is no state change.

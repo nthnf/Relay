@@ -93,11 +93,19 @@ impl Handler {
                         return Err(Status::not_found("Member role not found"));
                     }
 
-                    if !member_role_joins.iter().any(|(_, role)| {
-                        role.as_ref()
-                            .map(|role| permission::has(role.permissions, permission::MEMBER_ADD))
-                            .unwrap_or(false)
-                    }) {
+                    let mut allowed = false;
+                    for (_, role) in &member_role_joins {
+                        let Some(role) = role.as_ref() else {
+                            return Err(Status::internal("Internal Server Error"));
+                        };
+                        let perms = permission::from_db(role.permissions)?;
+                        if permission::has(perms, permission::MEMBER_ADD) {
+                            allowed = true;
+                            break;
+                        }
+                    }
+
+                    if !allowed {
                         return Err(Status::permission_denied("Insufficient permissions"));
                     };
 
@@ -164,20 +172,47 @@ impl Handler {
                     };
 
                     // Create workspace member role
-                    let member_role = workspace_member_role::ActiveModel {
-                        user_id: Set(target_user_id),
-                        workspace_id: Set(workspace_id),
-                        role_id: Set(member_role.id),
-                        assigned_at: Set(now.into()),
-                        assigned_by_user_id: Set(Some(actor_user_id)),
-                    };
-                    workspace_member_role::Entity::insert(member_role)
-                        .exec(txn)
+                    let existing_member_role = workspace_member_role::Entity::find()
+                        .filter(workspace_member_role::Column::WorkspaceId.eq(workspace_id))
+                        .filter(workspace_member_role::Column::UserId.eq(target_user_id))
+                        .filter(workspace_member_role::Column::RoleId.eq(member_role.id))
+                        .one(txn)
                         .await
                         .map_err(|e| {
-                            error!(error = %e, "Workspace member insert failed");
+                            error!(error = %e, "Workspace member role lookup failed");
                             Status::internal("Internal Server Error")
                         })?;
+
+                    match existing_member_role {
+                        Some(existing_member_role) => {
+                            let mut active = existing_member_role.into_active_model();
+                            active.assigned_at = Set(now.into());
+                            active.assigned_by_user_id = Set(Some(actor_user_id));
+                            workspace_member_role::Entity::update(active)
+                                .exec(txn)
+                                .await
+                                .map_err(|e| {
+                                    error!(error = %e, "Workspace member role update failed");
+                                    Status::internal("Internal Server Error")
+                                })?;
+                        }
+                        None => {
+                            let member_role = workspace_member_role::ActiveModel {
+                                user_id: Set(target_user_id),
+                                workspace_id: Set(workspace_id),
+                                role_id: Set(member_role.id),
+                                assigned_at: Set(now.into()),
+                                assigned_by_user_id: Set(Some(actor_user_id)),
+                            };
+                            workspace_member_role::Entity::insert(member_role)
+                                .exec(txn)
+                                .await
+                                .map_err(|e| {
+                                    error!(error = %e, "Workspace member role insert failed");
+                                    Status::internal("Internal Server Error")
+                                })?;
+                        }
+                    }
 
                     // Insert workspace member added event
                     let event = outbox_event::ActiveModel {

@@ -2,13 +2,13 @@ use sea_orm::{ConnectionTrait, EntityTrait};
 use tonic::Status;
 use uuid::Uuid;
 
-use crate::entity::user_account;
+use crate::entity::user_snapshot;
 
 pub(super) async fn user_account_exists<C>(db: &C, user_id: Uuid) -> Result<bool, Status>
 where
     C: ConnectionTrait,
 {
-    let account = user_account::Entity::find_by_id(user_id)
+    let account = user_snapshot::Entity::find_by_id(user_id)
         .one(db)
         .await
         .map_err(|e| {

@@ -11,8 +11,7 @@ pub struct Model {
     pub workspace_id: Uuid,
     #[sea_orm(column_type = "Text", unique_key = "name")]
     pub name: String,
-    #[sea_orm(column_type = "Integer")]
-    pub permissions: u32,
+    pub permissions: i32,
     pub is_system_role: bool,
     pub created_at: DateTimeWithTimeZone,
 }

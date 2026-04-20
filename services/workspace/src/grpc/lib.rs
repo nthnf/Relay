@@ -2,9 +2,13 @@ use sea_orm::{DatabaseConnection, EntityTrait};
 use tonic::Status;
 use uuid::Uuid;
 
-use crate::entity::user_account;
+use crate::entity::user_snapshot;
 
 pub(super) mod permission {
+    use std::convert::TryFrom;
+
+    use tonic::Status;
+
     pub const WORKSPACE_READ: u32 = 1 << 0;
     pub const MEMBER_ADD: u32 = 1 << 1;
     pub const MEMBER_REMOVE: u32 = 1 << 2;
@@ -28,6 +32,14 @@ pub(super) mod permission {
 
     pub fn has_all(perms: u32, bits: u32) -> bool {
         perms & bits == bits
+    }
+
+    pub fn from_db(perms: i32) -> Result<u32, Status> {
+        u32::try_from(perms).map_err(|_| Status::internal("Invalid permissions"))
+    }
+
+    pub fn to_db(perms: u32) -> Result<i32, Status> {
+        i32::try_from(perms).map_err(|_| Status::internal("Invalid permissions"))
     }
 
     pub const fn owner() -> u32 {
@@ -68,7 +80,7 @@ pub(super) async fn user_account_exists(
     db: &DatabaseConnection,
     user_id: Uuid,
 ) -> Result<bool, Status> {
-    let account = user_account::Entity::find_by_id(user_id)
+    let account = user_snapshot::Entity::find_by_id(user_id)
         .one(db)
         .await
         .map_err(|e| {

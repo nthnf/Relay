@@ -6,7 +6,7 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::entity::{outbox_event, user_profile};
-use crate::event::UserProfileUpdatedPayload;
+use crate::events::UserProfileUpdatedPayload;
 
 use super::handler::{Handler, actor_user_id, payload_value, to_timestamp};
 

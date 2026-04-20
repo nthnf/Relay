@@ -19,6 +19,14 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::user_snapshot::Entity",
+        from = "Column::OwnerUserId",
+        to = "super::user_snapshot::Column::UserId",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    UserSnapshot,
     #[sea_orm(has_many = "super::workspace_channel::Entity")]
     WorkspaceChannel,
     #[sea_orm(has_many = "super::workspace_invitation::Entity")]
@@ -31,6 +39,12 @@ pub enum Relation {
     WorkspaceMemberRole,
     #[sea_orm(has_many = "super::workspace_role::Entity")]
     WorkspaceRole,
+}
+
+impl Related<super::user_snapshot::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::UserSnapshot.def()
+    }
 }
 
 impl Related<super::workspace_channel::Entity> for Entity {

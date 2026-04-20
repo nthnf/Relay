@@ -22,6 +22,22 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
+        belongs_to = "super::user_snapshot::Entity",
+        from = "Column::IssuedByUserId",
+        to = "super::user_snapshot::Column::UserId",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    UserSnapshot2,
+    #[sea_orm(
+        belongs_to = "super::user_snapshot::Entity",
+        from = "Column::IssuedToUserId",
+        to = "super::user_snapshot::Column::UserId",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    UserSnapshot1,
+    #[sea_orm(
         belongs_to = "super::workspace::Entity",
         from = "Column::WorkspaceId",
         to = "super::workspace::Column::Id",

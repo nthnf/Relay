@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
 use workspace_crate::{
-    entity::{outbox_event, user_account, workspace_member, workspace_member_role},
+    entity::{outbox_event, user_snapshot, workspace_member, workspace_member_role},
     grpc::WorkspaceServer,
 };
 
@@ -226,9 +226,12 @@ async fn insert_user_account(
     user_id: Uuid,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let now = chrono::Utc::now();
-    user_account::Entity::insert(user_account::ActiveModel {
+    user_snapshot::Entity::insert(user_snapshot::ActiveModel {
         user_id: Set(user_id),
         email_verified: Set(false),
+        username: Set(format!("user-{user_id}")),
+        display_name: Set("Test User".to_string()),
+        avatar_url: Set(None),
         created_at: Set(now.into()),
         updated_at: Set(now.into()),
     })

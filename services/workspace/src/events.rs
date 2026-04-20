@@ -97,3 +97,12 @@ pub struct UserEmailVerifiedPayload {
     pub email: String,
     pub email_verified_at: String,
 }
+
+#[derive(Deserialize)]
+pub struct UserProfileUpdatedPayload {
+    pub user_id: String,
+    pub username: String,
+    pub display_name: String,
+    pub avatar_url: Option<String>,
+    pub updated_at: String,
+}

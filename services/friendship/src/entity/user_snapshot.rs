@@ -3,11 +3,17 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
-#[sea_orm(table_name = "user_account")]
+#[sea_orm(table_name = "user_snapshot")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub user_id: Uuid,
     pub email_verified: bool,
+    #[sea_orm(column_type = "Text")]
+    pub username: String,
+    #[sea_orm(column_type = "Text")]
+    pub display_name: String,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub avatar_url: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

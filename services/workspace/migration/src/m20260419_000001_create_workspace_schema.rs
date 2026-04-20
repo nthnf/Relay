@@ -9,17 +9,20 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(UserAccount::Table)
+                    .table(UserSnapshot::Table)
                     .if_not_exists()
-                    .col(uuid(UserAccount::UserId).not_null().primary_key())
-                    .col(boolean(UserAccount::EmailVerified).not_null())
+                    .col(uuid(UserSnapshot::UserId).not_null().primary_key())
+                    .col(boolean(UserSnapshot::EmailVerified).not_null())
+                    .col(text(UserSnapshot::Username).not_null())
+                    .col(text(UserSnapshot::DisplayName).not_null())
+                    .col(text_null(UserSnapshot::AvatarUrl))
                     .col(
-                        timestamp_with_time_zone(UserAccount::CreatedAt)
+                        timestamp_with_time_zone(UserSnapshot::CreatedAt)
                             .not_null()
                             .default(Expr::current_timestamp()),
                     )
                     .col(
-                        timestamp_with_time_zone(UserAccount::UpdatedAt)
+                        timestamp_with_time_zone(UserSnapshot::UpdatedAt)
                             .not_null()
                             .default(Expr::current_timestamp()),
                     )
@@ -47,6 +50,13 @@ impl MigrationTrait for Migration {
                             .default(Expr::current_timestamp()),
                     )
                     .col(timestamp_with_time_zone(Workspace::ArchivedAt).null())
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-workspace-owner-user-id")
+                            .from(Workspace::Table, Workspace::OwnerUserId)
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -80,6 +90,16 @@ impl MigrationTrait for Migration {
                             .from(WorkspaceInviteLink::Table, WorkspaceInviteLink::WorkspaceId)
                             .to(Workspace::Table, Workspace::Id)
                             .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-workspace-invite-link-created-by-user-id")
+                            .from(
+                                WorkspaceInviteLink::Table,
+                                WorkspaceInviteLink::CreatedByUserId,
+                            )
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
                     )
                     .to_owned(),
             )
@@ -128,6 +148,20 @@ impl MigrationTrait for Migration {
                             .to(Workspace::Table, Workspace::Id)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-workspace-member-user-id")
+                            .from(WorkspaceMember::Table, WorkspaceMember::UserId)
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-workspace-member-added-by-user-id")
+                            .from(WorkspaceMember::Table, WorkspaceMember::AddedByUserId)
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -159,6 +193,17 @@ impl MigrationTrait for Migration {
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
+            )
+            .await?;
+
+        manager
+            .get_connection()
+            .execute_unprepared(
+                r#"
+                ALTER TABLE "workspace_role"
+                ADD CONSTRAINT "ck-workspace-role-permissions-nonnegative"
+                CHECK ("permissions" >= 0)
+                "#,
             )
             .await?;
 
@@ -204,6 +249,23 @@ impl MigrationTrait for Migration {
                     )
                     .foreign_key(
                         ForeignKey::create()
+                            .name("fk-workspace-member-role-user-id")
+                            .from(WorkspaceMemberRole::Table, WorkspaceMemberRole::UserId)
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-workspace-member-role-assigned-by-user-id")
+                            .from(
+                                WorkspaceMemberRole::Table,
+                                WorkspaceMemberRole::AssignedByUserId,
+                            )
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
                             .name("fk-workspace-member-role-workspace-role-id")
                             .from(WorkspaceMemberRole::Table, WorkspaceMemberRole::RoleId)
                             .to(WorkspaceRole::Table, WorkspaceRole::Id)
@@ -241,6 +303,26 @@ impl MigrationTrait for Migration {
                             .to(Workspace::Table, Workspace::Id)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-workspace-invitation-issued-to-user-id")
+                            .from(
+                                WorkspaceInvitation::Table,
+                                WorkspaceInvitation::IssuedToUserId,
+                            )
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-workspace-invitation-issued-by-user-id")
+                            .from(
+                                WorkspaceInvitation::Table,
+                                WorkspaceInvitation::IssuedByUserId,
+                            )
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -268,6 +350,13 @@ impl MigrationTrait for Migration {
                             .from(WorkspaceChannel::Table, WorkspaceChannel::WorkspaceId)
                             .to(Workspace::Table, Workspace::Id)
                             .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-workspace-channel-created-by-user-id")
+                            .from(WorkspaceChannel::Table, WorkspaceChannel::CreatedByUserId)
+                            .to(UserSnapshot::Table, UserSnapshot::UserId)
+                            .on_delete(ForeignKeyAction::NoAction),
                     )
                     .to_owned(),
             )
@@ -359,6 +448,16 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
+            .get_connection()
+            .execute_unprepared(
+                r#"
+                ALTER TABLE "workspace_role"
+                DROP CONSTRAINT IF EXISTS "ck-workspace-role-permissions-nonnegative"
+                "#,
+            )
+            .await?;
+
+        manager
             .drop_table(Table::drop().table(OutboxEvent::Table).to_owned())
             .await?;
         manager
@@ -383,7 +482,7 @@ impl MigrationTrait for Migration {
             .drop_table(Table::drop().table(Workspace::Table).to_owned())
             .await?;
         manager
-            .drop_table(Table::drop().table(UserAccount::Table).to_owned())
+            .drop_table(Table::drop().table(UserSnapshot::Table).to_owned())
             .await?;
 
         Ok(())
@@ -391,10 +490,13 @@ impl MigrationTrait for Migration {
 }
 
 #[derive(DeriveIden)]
-enum UserAccount {
+enum UserSnapshot {
     Table,
     UserId,
     EmailVerified,
+    Username,
+    DisplayName,
+    AvatarUrl,
     CreatedAt,
     UpdatedAt,
 }

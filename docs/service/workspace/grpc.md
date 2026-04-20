@@ -11,7 +11,7 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 - Workspace enforces workspace-local authorization at its own boundary using membership and role state it owns.
 - `owner_user_id` is the canonical ultimate authority for the workspace in v1. Role assignments delegate permissions to non-owner members, but the owner implicitly has all permissions regardless of explicit role assignment.
 - Owner transfer is not supported in v1, so the owner cannot be removed or self-remove through existing RPCs.
-- Workspace validates write-path target-user IDs with local `user_account` rows before issuing invitations or directly adding a member.
+- Workspace validates write-path target-user IDs with local `user_snapshot` rows before issuing invitations or directly adding a member.
 - Per-user invitations are app-scoped in v1; no email delivery is required from workspace.
 - Membership is the source of truth for access to workspace channels; `chat` does not decide who belongs to a workspace.
 - Domain writes and matching `outbox_event` inserts happen in the same transaction.
@@ -151,7 +151,7 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 
 - Require the actor to have workspace-owned permission to add members directly.
 - Require actor to be active workspace member.
-- Validate `target_user_id` existence through local `user_account` rows before inserting membership.
+- Validate `target_user_id` existence through local `user_snapshot` rows before inserting membership.
 - Reject or return idempotent success when the target user is already an active member; do not create duplicate memberships.
 - If the target user exists with `membership_status = removed`, reactivate the same row and recreate baseline member-role assignment.
 - On success, create or reactivate `workspace_member` row and matching `WorkspaceMemberAdded` outbox row in one transaction.
@@ -205,7 +205,7 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 **Contract notes**
 
 - Require the actor to have workspace-owned permission to invite members.
-- Validate `target_user_id` existence through local `user_account` rows before inserting the invitation row.
+- Validate `target_user_id` existence through local `user_snapshot` rows before inserting the invitation row.
 - Reject if the target user is already an active member.
 - Reject if an active pending invitation already exists for `(workspace_id, target_user_id)`.
 - The emitted `WorkspaceInvitationIssued` event must include workspace and inviter snapshots needed by app UI consumers.

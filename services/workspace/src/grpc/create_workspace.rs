@@ -90,7 +90,10 @@ impl Handler {
                         created_at: Set(now.into()),
                         workspace_id: Set(workspace_id),
                         name: Set("Owner".to_string()),
-                        permissions: Set(permission::owner()),
+                        permissions: Set(
+                            permission::to_db(permission::owner())
+                                .expect("owner permissions fit in i32"),
+                        ),
                     };
                     let admin_role = workspace_role::ActiveModel {
                         id: Set(Uuid::new_v4()),
@@ -98,7 +101,10 @@ impl Handler {
                         created_at: Set(now.into()),
                         workspace_id: Set(workspace_id),
                         name: Set("Admin".to_string()),
-                        permissions: Set(permission::admin()),
+                        permissions: Set(
+                            permission::to_db(permission::admin())
+                                .expect("admin permissions fit in i32"),
+                        ),
                     };
                     let member_role = workspace_role::ActiveModel {
                         id: Set(Uuid::new_v4()),
@@ -106,7 +112,10 @@ impl Handler {
                         created_at: Set(now.into()),
                         workspace_id: Set(workspace_id),
                         name: Set("Member".to_string()),
-                        permissions: Set(permission::member()),
+                        permissions: Set(
+                            permission::to_db(permission::member())
+                                .expect("member permissions fit in i32"),
+                        ),
                     };
                     workspace_role::Entity::insert_many(vec![owner_role, admin_role, member_role])
                         .exec(txn)

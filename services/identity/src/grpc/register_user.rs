@@ -11,7 +11,7 @@ use crate::auth::{hash_password, hash_token};
 use crate::entity::{
     email_verification_token, outbox_event, user_account, user_credential_password, user_profile,
 };
-use crate::event::{UserRegisteredPayload, VerificationEmailRequestedPayload};
+use crate::events::{UserRegisteredPayload, VerificationEmailRequestedPayload};
 
 use super::handler::{
     EMAIL_NORMALIZED_CONSTRAINT, Handler, USERNAME_CONSTRAINT, payload_value, to_timestamp,

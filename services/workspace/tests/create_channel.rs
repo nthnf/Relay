@@ -11,6 +11,7 @@ use tonic::{metadata::MetadataValue, transport::Server, Request};
 use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
+use workspace_crate::entity::user_snapshot;
 use workspace_crate::grpc::WorkspaceServer;
 
 const ACTOR_USER_ID_METADATA: &str = "x-user-id";
@@ -20,6 +21,8 @@ async fn create_channel_allows_duplicate_names_and_appends_position()
 -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
+
+    insert_user_snapshot(&env.db, actor_user_id).await?;
 
     let created = env
         .client
@@ -149,4 +152,24 @@ fn actor_request<T>(user_id: Uuid, request: T) -> Request<T> {
             MetadataValue::try_from(user_id.to_string()).expect("metadata"),
         );
     request
+}
+
+async fn insert_user_snapshot(
+    db: &sea_orm::DatabaseConnection,
+    user_id: Uuid,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let now = chrono::Utc::now();
+    workspace_crate::entity::user_snapshot::Entity::insert(user_snapshot::ActiveModel {
+        user_id: sea_orm::Set(user_id),
+        email_verified: sea_orm::Set(false),
+        username: sea_orm::Set(format!("user-{user_id}")),
+        display_name: sea_orm::Set("Test User".to_string()),
+        avatar_url: sea_orm::Set(None),
+        created_at: sea_orm::Set(now.into()),
+        updated_at: sea_orm::Set(now.into()),
+    })
+    .exec(db)
+    .await?;
+
+    Ok(())
 }
