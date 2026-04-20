@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::handler::Handler;
-use super::lib::{actor_user_id, payload_value, to_timestamp};
+use relay_types::{actor_user_id, payload_value, to_timestamp};
 
 impl Handler {
     pub(super) async fn reject_friend_request(
@@ -83,7 +83,7 @@ impl Handler {
                             requester_user_id: requester_id.to_string(),
                             friend_request_id: friend_request_id.to_string(),
                             rejected_at: now.to_rfc3339(),
-                        })),
+                        })?),
                     };
                     outbox_event::Entity::insert(friend_request_rejected_event)
                         .exec(txn)

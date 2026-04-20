@@ -177,7 +177,7 @@ impl Handler {
                             display_name: display_name.clone(),
                             avatar_url: avatar_url.clone(),
                             registered_at: now.to_rfc3339(),
-                        })),
+                        })?),
                     };
                     outbox_event::Entity::insert(user_registered_event)
                         .exec(txn)
@@ -210,7 +210,7 @@ impl Handler {
                             verification_token_id: verification_token_id.to_string(),
                             reason: "registration".to_string(),
                             requested_at: now.to_rfc3339(),
-                        })),
+                        })?),
                     };
                     outbox_event::Entity::insert(email_verification_request)
                         .exec(txn)

@@ -113,7 +113,7 @@ impl Handler {
                             verification_token_id: new_token_id.to_string(),
                             reason: "resend_verification".to_string(),
                             requested_at: now.to_rfc3339(),
-                        })),
+                        })?),
                     };
                     outbox_event::Entity::insert(event).exec(txn).await.map_err(|e| {
                         error!(error = %e, "identity resend verification email outbox insert failed");

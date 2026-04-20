@@ -9,6 +9,7 @@ Workspace publishes integration events by inserting service-owned rows into `out
 **When published**
 
 - After a new workspace and its creator membership are committed successfully.
+- After a new workspace, creator membership, and seeded first channel are committed successfully.
 
 **Minimum payload**
 
@@ -22,6 +23,7 @@ Workspace publishes integration events by inserting service-owned rows into `out
 
 - `bootstrap` workspace projections
 - Audit or analytics workflows
+- Also emits `WorkspaceMemberAdded` for creator membership and `WorkspaceChannelCreated` for seeded first channel.
 
 ### `WorkspaceMemberAdded`
 
@@ -75,14 +77,12 @@ Workspace publishes integration events by inserting service-owned rows into `out
 - `issued_by_user_id`
 - `workspace_name_snapshot`
 - `inviter_display_name_snapshot`
-- `invitee_email`
 - `expires_at`
 - `created_at`
 
 **Typical consumers**
 
-- `email` invitation delivery workflows
-- Notification or email workflows
+- App notification workflows
 - Audit workflows
 
 ### `WorkspaceInvitationAccepted`
@@ -125,6 +125,47 @@ Workspace publishes integration events by inserting service-owned rows into `out
 - `bootstrap` sidebar channel projections
 - `realtime` connected-client sidebar refresh workflows
 
+### `WorkspaceInviteLinkCreated`
+
+**When published**
+
+- After a new bearer invite link is committed.
+
+**Minimum payload**
+
+- `workspace_invite_link_id`
+- `workspace_id`
+- `code`
+- `created_by_user_id`
+- `status`
+- `expires_at`
+- `max_uses`
+- `use_count`
+- `created_at`
+
+**Typical consumers**
+
+- Audit workflows
+- Admin or UI surfaces that list active join links
+
+### `WorkspaceInviteLinkRevoked`
+
+**When published**
+
+- After a bearer invite link is revoked.
+
+**Minimum payload**
+
+- `workspace_invite_link_id`
+- `workspace_id`
+- `status`
+- `revoked_at`
+
+**Typical consumers**
+
+- Audit workflows
+- UI surfaces that list active join links
+
 ## Event Rules
 
 - Event payloads use workspace-owned IDs plus identity-owned `user_id` references only.
@@ -132,7 +173,9 @@ Workspace publishes integration events by inserting service-owned rows into `out
 - `WorkspaceMemberAdded` is the durable membership grant signal regardless of whether the source was direct add or invitation acceptance.
 - When invitation acceptance creates membership, `WorkspaceMemberAdded.added_by_user_id` is the invitation issuer so downstream consumers can treat the membership source consistently.
 - `WorkspaceInvitationAccepted` does not replace `WorkspaceMemberAdded`; downstream consumers that materialize member-visible access should key off `WorkspaceMemberAdded`.
-- `WorkspaceInvitationIssued` must be self-contained enough for downstream email rendering and delivery, including the workspace display snapshot plus inviter-display and recipient-email fields resolved during issuance.
+- `WorkspaceInvitationIssued` must be self-contained enough for downstream app UI rendering and audit, including workspace and inviter snapshots.
+- `WorkspaceInvitationIssued` is for per-user app invites only. Join-link delivery belongs to `workspace_invite_link`.
+- `WorkspaceInviteLinkCreated` and `WorkspaceInviteLinkRevoked` cover bearer join links; `WorkspaceMemberAdded` still represents successful join after link redemption.
 - `WorkspaceMemberRemoved` must not be emitted for the owner in v1 because owner transfer and owner removal are deferred.
 - Publication ordering should be preserved per workspace so membership and channel consumers converge predictably.
 - Consumers must be idempotent because replay and duplicate delivery are expected platform behaviors.

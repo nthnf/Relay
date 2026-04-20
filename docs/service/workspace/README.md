@@ -7,9 +7,10 @@ Workspace owns workspace containers, membership, roles, invitations, and channel
 - Create workspaces and seed the creator as the first member.
 - Own workspace membership lifecycle, including add, remove, and invitation acceptance.
 - Own workspace-scoped roles and member-role assignments.
-- Issue and track workspace invitations with explicit expiry.
+- Issue and track workspace invitations and join links with explicit expiry.
 - Own channel metadata such as channel name, kind, and ordering within a workspace.
 - Publish durable workspace integration events through the local `outbox_event` table.
+- Mirror identity `user_account` rows into workspace-local `user_account` state for write-path target validation.
 
 ## Non-Goals
 
@@ -24,7 +25,7 @@ Workspace owns workspace containers, membership, roles, invitations, and channel
 - **RabbitMQ** for durable cold-path publication of workspace events.
 - **outbox worker sidecar** for polling local `outbox_event` rows and publishing them.
 - **Postgres** as the service-owned source of truth for workspaces, memberships, roles, invitations, and channels.
-- **identity** as the owner of stable `user_id` references used by membership and invitation records, and for synchronous target-user existence validation on invitation and direct-member-add write paths.
+- **identity** as the owner of stable `user_id` references used by membership and invitation records, and as source for workspace-local `user_account` mirror rows.
 - **bootstrap** as a downstream consumer of workspace and channel events for UI-facing projections.
 - **realtime** as a downstream consumer of selected membership and channel events for connected-client updates.
 
@@ -32,7 +33,9 @@ Workspace owns workspace containers, membership, roles, invitations, and channel
 
 - Workspace owns a dedicated Postgres database.
 - Domain writes and matching `outbox_event` inserts happen in the same local transaction.
+- Workspace keeps local `user_account` rows in sync from identity events for write-path validation.
 - Each workspace aggregate uses service-owned UUIDs; cross-service references use identity-owned `user_id` values only.
+- Envoy ext_authz already validates actor identity before workspace RPCs; workspace trusts `x-user-id` and does not re-check actor existence on every command.
 - Redis is not required by default for v1 workspace behavior.
 
 ## gRPC Surface
@@ -73,4 +76,6 @@ See `events.md` for payload and publication rules.
 - When invitation acceptance creates membership, `added_by_user_id` is recorded as the invitation issuer.
 - Roles are workspace-scoped and never shared across workspaces.
 - `member_count` counts active memberships only. `channel_count` counts current `workspace_channel` rows in v1 because archive/delete flows are not yet defined here.
+- Workspace validates direct-add and invitation targets against local `user_account` rows, not by synchronously calling `identity`.
+- Workspace invitations are app-scoped by default; no email delivery is required for v1.
 - Mutable workspace and channel update events are deferred until a later revision; this v1 document set focuses on create, membership, invitation, and channel-create flows.

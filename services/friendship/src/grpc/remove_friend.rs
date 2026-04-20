@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::handler::Handler;
-use super::lib::{actor_user_id, payload_value, to_timestamp};
+use relay_types::{actor_user_id, payload_value, to_timestamp};
 
 impl Handler {
     pub(super) async fn remove_friend(
@@ -88,7 +88,7 @@ impl Handler {
                             ],
                             removed_at: now.to_rfc3339(),
                             reason: "removed_by_user".to_string(),
-                        })),
+                        })?),
                     };
                     outbox_event::Entity::insert(removed_event)
                         .exec(txn)

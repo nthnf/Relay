@@ -1971,6 +1971,7 @@ dependencies = [
  "prost",
  "prost-types",
  "relay-proto",
+ "relay-types",
  "sea-orm",
  "serde",
  "serde_json",
@@ -2719,6 +2720,7 @@ dependencies = [
  "prost",
  "prost-types",
  "relay-proto",
+ "relay-types",
  "sea-orm",
  "serde",
  "serde_json",
@@ -4208,6 +4210,15 @@ version = "0.1.0"
 [[package]]
 name = "relay-types"
 version = "0.1.0"
+dependencies = [
+ "chrono",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "tonic",
+ "tracing",
+ "uuid",
+]
 
 [[package]]
 name = "rend"
@@ -6412,6 +6423,35 @@ dependencies = [
 [[package]]
 name = "workspace"
 version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dotenvy",
+ "lapin",
+ "prost",
+ "prost-types",
+ "relay-proto",
+ "relay-types",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "testcontainers-modules",
+ "thiserror",
+ "tokio",
+ "tonic",
+ "tonic-prost",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "workspace-migration",
+]
+
+[[package]]
+name = "workspace-migration"
+version = "0.1.0"
+dependencies = [
+ "sea-orm-migration",
+ "tokio",
+]
 
 [[package]]
 name = "writeable"

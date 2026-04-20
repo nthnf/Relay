@@ -16,6 +16,7 @@ members = [
   "services/identity/migration",
   "services/realtime",
   "services/workspace",
+  "services/workspace/migration",
   "workers/outbox",
 ]
 

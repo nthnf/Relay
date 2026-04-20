@@ -11,7 +11,8 @@ use crate::{
 };
 
 use super::handler::Handler;
-use super::lib::{actor_user_id, payload_value, to_timestamp, user_account_exists};
+use super::lib::user_account_exists;
+use relay_types::{actor_user_id, payload_value, to_timestamp};
 
 impl Handler {
     pub(super) async fn unblock_user(
@@ -73,7 +74,7 @@ impl Handler {
                             blocker_user_id: actor_user_id.to_string(),
                             blocked_user_id: target_user_id.to_string(),
                             unblocked_at: now.to_rfc3339(),
-                        })),
+                        })?),
                     };
                     outbox_event::Entity::insert(unblocked_event)
                         .exec(txn)

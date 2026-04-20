@@ -7,10 +7,12 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 - Authenticated actor identity is derived from Envoy-validated access-token context; callers must not be allowed to mutate another actor's workspace state by supplying arbitrary user IDs.
 - Envoy calls identity `Authorization/Check` on protected routes, then forwards trusted actor headers such as `x-user-id` and `x-session-id` out-of-band.
 - External application callers do not supply actor identity in request payloads for end-user actions; the transport boundary or a trusted backend caller context attaches it out-of-band.
+- Workspace trusts Envoy-provided actor headers and does not repeat actor existence validation on every RPC.
 - Workspace enforces workspace-local authorization at its own boundary using membership and role state it owns.
 - `owner_user_id` is the canonical ultimate authority for the workspace in v1. Role assignments delegate permissions to non-owner members, but the owner implicitly has all permissions regardless of explicit role assignment.
 - Owner transfer is not supported in v1, so the owner cannot be removed or self-remove through existing RPCs.
-- Workspace validates write-path target-user IDs with `identity` before issuing invitations or directly adding a member.
+- Workspace validates write-path target-user IDs with local `user_account` rows before issuing invitations or directly adding a member.
+- Per-user invitations are app-scoped in v1; no email delivery is required from workspace.
 - Membership is the source of truth for access to workspace channels; `chat` does not decide who belongs to a workspace.
 - Domain writes and matching `outbox_event` inserts happen in the same transaction.
 
@@ -21,6 +23,7 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 **Request fields**
 
 - `name` (`string`) - workspace display name.
+- `first_channel_name` (`string`) - required initial channel name. Kind is fixed to `text` and position is fixed to `1`.
 
 **Response fields**
 
@@ -29,11 +32,13 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 - `owner_user_id` (`uuid`)
 - `created_at` (`timestamp`)
 - `initial_member_user_id` (`uuid`)
+- `first_channel_id` (`uuid`)
 
 **Contract notes**
 
 - Create the `workspace` row and the creator's `workspace_member` row in one transaction.
-- Seed any required system role data for the creator in the same transaction when role bootstrapping is enabled.
+- Create initial `workspace_channel` row in same transaction with `channel_kind = text`, `position = 1`, and return its id.
+- Seed required system roles for the creator in the same transaction when role bootstrapping is enabled. Owner role should include all permission bits, including `workspace.delete`.
 - Insert a matching `WorkspaceCreated` outbox row before commit.
 
 ### `GetWorkspace`
@@ -101,7 +106,7 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 **Contract notes**
 
 - Require the actor to be an active member with workspace-owned permission to create channels.
-- Reject duplicate active channel names within the same workspace.
+- Duplicate active channel names are allowed in v1.
 - If `position` is omitted, assign the next available ordering value within the workspace.
 - Reject duplicate active `position` values within the same workspace in v1.
 - V1 does not define a reorder RPC; callers should treat returned positions as stable sidebar ordering metadata.
@@ -145,9 +150,11 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 **Contract notes**
 
 - Require the actor to have workspace-owned permission to add members directly.
-- Validate `target_user_id` existence through `identity` before inserting membership.
+- Require actor to be active workspace member.
+- Validate `target_user_id` existence through local `user_account` rows before inserting membership.
 - Reject or return idempotent success when the target user is already an active member; do not create duplicate memberships.
-- On success, create the `workspace_member` row and matching `WorkspaceMemberAdded` outbox row in one transaction.
+- If the target user exists with `membership_status = removed`, reactivate the same row and recreate baseline member-role assignment.
+- On success, create or reactivate `workspace_member` row and matching `WorkspaceMemberAdded` outbox row in one transaction.
 
 ### `RemoveMember`
 
@@ -198,10 +205,10 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 **Contract notes**
 
 - Require the actor to have workspace-owned permission to invite members.
-- Validate `target_user_id` existence through `identity` before inserting the invitation row.
+- Validate `target_user_id` existence through local `user_account` rows before inserting the invitation row.
 - Reject if the target user is already an active member.
 - Reject if an active pending invitation already exists for `(workspace_id, target_user_id)`.
-- The emitted `WorkspaceInvitationIssued` event must include `workspace_name_snapshot` from workspace-owned state plus `inviter_display_name_snapshot` and `invitee_email` resolved during the issue flow so downstream email delivery stays self-contained in v1.
+- The emitted `WorkspaceInvitationIssued` event must include workspace and inviter snapshots needed by app UI consumers.
 - On success, insert the `workspace_invitation` row and matching `WorkspaceInvitationIssued` outbox row in one transaction.
 
 ### `AcceptInvitation`

@@ -11,37 +11,11 @@ use relay_proto::identity::{
 };
 use sea_orm::DatabaseConnection;
 use tonic::{Request, Response, Status};
-use uuid::Uuid;
-
 use crate::auth::AuthKeys;
+pub(super) use relay_types::{actor_user_id, payload_value, to_timestamp};
 
 pub(super) const EMAIL_NORMALIZED_CONSTRAINT: &str = "uq-user-account-email-normalized";
 pub(super) const USERNAME_CONSTRAINT: &str = "uq-user-profile-username";
-pub(super) const ACTOR_USER_ID_METADATA: &str = "x-user-id";
-
-pub(super) fn to_timestamp(dt: chrono::DateTime<chrono::Utc>) -> prost_types::Timestamp {
-    prost_types::Timestamp {
-        seconds: dt.timestamp(),
-        nanos: dt.timestamp_subsec_nanos() as i32,
-    }
-}
-
-pub(super) fn payload_value<T: serde::Serialize>(payload: T) -> serde_json::Value {
-    serde_json::to_value(payload).expect("event payload should serialize")
-}
-
-pub(super) fn actor_user_id<T>(request: &Request<T>) -> Result<Uuid, Status> {
-    let raw = request
-        .metadata()
-        .get(ACTOR_USER_ID_METADATA)
-        .ok_or_else(|| Status::unauthenticated("missing authenticated actor context"))?;
-
-    let raw = raw
-        .to_str()
-        .map_err(|_| Status::unauthenticated("invalid authenticated actor context"))?;
-
-    Uuid::parse_str(raw).map_err(|_| Status::unauthenticated("invalid authenticated actor context"))
-}
 
 #[derive(Clone)]
 pub struct Handler {

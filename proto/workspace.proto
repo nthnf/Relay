@@ -14,10 +14,14 @@ service WorkspaceService {
   rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
   rpc IssueInvitation(IssueInvitationRequest) returns (IssueInvitationResponse);
   rpc AcceptInvitation(AcceptInvitationRequest) returns (AcceptInvitationResponse);
+  rpc CreateInviteLink(CreateInviteLinkRequest) returns (CreateInviteLinkResponse);
+  rpc JoinWorkspaceByInviteLink(JoinWorkspaceByInviteLinkRequest) returns (JoinWorkspaceByInviteLinkResponse);
+  rpc RevokeInviteLink(RevokeInviteLinkRequest) returns (RevokeInviteLinkResponse);
 }
 
 message CreateWorkspaceRequest {
   string name = 1;
+  string first_channel_name = 2;
 }
 
 message CreateWorkspaceResponse {
@@ -26,6 +30,16 @@ message CreateWorkspaceResponse {
   string owner_user_id = 3;
   google.protobuf.Timestamp created_at = 4;
   string initial_member_user_id = 5;
+  string first_channel_id = 6;
+}
+
+message WorkspaceRole {
+  string workspace_role_id = 1;
+  string workspace_id = 2;
+  string name = 3;
+  uint32 permissions = 4;
+  bool is_system_role = 5;
+  google.protobuf.Timestamp created_at = 6;
 }
 
 message GetWorkspaceRequest {
@@ -129,6 +143,46 @@ message IssueInvitationResponse {
   string status = 5;
   google.protobuf.Timestamp expires_at = 6;
   google.protobuf.Timestamp created_at = 7;
+}
+
+message CreateInviteLinkRequest {
+  string workspace_id = 1;
+  optional google.protobuf.Timestamp expires_at = 2;
+  optional int32 max_uses = 3;
+}
+
+message CreateInviteLinkResponse {
+  string workspace_invite_link_id = 1;
+  string workspace_id = 2;
+  string code = 3;
+  string status = 4;
+  optional google.protobuf.Timestamp expires_at = 5;
+  optional int32 max_uses = 6;
+  int32 use_count = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message JoinWorkspaceByInviteLinkRequest {
+  string code = 1;
+}
+
+message JoinWorkspaceByInviteLinkResponse {
+  string workspace_id = 1;
+  string workspace_invite_link_id = 2;
+  string user_id = 3;
+  google.protobuf.Timestamp joined_at = 4;
+  string added_by_user_id = 5;
+}
+
+message RevokeInviteLinkRequest {
+  string workspace_invite_link_id = 1;
+}
+
+message RevokeInviteLinkResponse {
+  string workspace_invite_link_id = 1;
+  string workspace_id = 2;
+  string status = 3;
+  optional google.protobuf.Timestamp revoked_at = 4;
 }
 
 message AcceptInvitationRequest {

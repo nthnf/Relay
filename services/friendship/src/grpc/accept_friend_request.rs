@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::handler::Handler;
-use super::lib::{actor_user_id, payload_value, to_timestamp};
+use relay_types::{actor_user_id, payload_value, to_timestamp};
 
 impl Handler {
     pub(super) async fn accept_friend_request(
@@ -145,7 +145,7 @@ impl Handler {
                                     friend_user_id: actor_user_id.to_string(),
                                 },
                             ],
-                        })),
+                        })?),
                     };
                     outbox_event::Entity::insert(friend_request_accepted_event)
                         .exec(txn)

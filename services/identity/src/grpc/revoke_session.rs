@@ -68,7 +68,7 @@ impl Handler {
                             user_id: user_id.to_string(),
                             revoked_at: revoked_at.to_rfc3339(),
                             revoke_reason: revoke_reason.clone(),
-                        })),
+                        })?),
                         status: Set("pending".to_string()),
                         publish_attempts: Set(0),
                         occurred_at: Set(revoked_at.into()),

@@ -19,7 +19,9 @@ use crate::entity::{
     user_session,
 };
 
-use super::handler::{ACTOR_USER_ID_METADATA, Handler};
+use relay_types::ACTOR_USER_ID_METADATA;
+
+use super::handler::Handler;
 
 fn test_service(db: DatabaseConnection) -> Handler {
     Handler::new(

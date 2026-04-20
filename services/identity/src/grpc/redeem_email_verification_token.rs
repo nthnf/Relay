@@ -138,7 +138,7 @@ impl Handler {
                             user_id: user_id.to_string(),
                             email: email.clone(),
                             email_verified_at: now.to_rfc3339(),
-                        })),
+                        })?),
                     };
                     outbox_event::Entity::insert(event).exec(txn).await.map_err(|e| {
                         error!(error = %e, "identity redeem verification token UserEmailVerified outbox insert failed");

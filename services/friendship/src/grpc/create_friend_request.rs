@@ -11,7 +11,8 @@ use crate::{
 };
 
 use super::handler::Handler;
-use super::lib::{actor_user_id, payload_value, to_timestamp, user_account_exists};
+use super::lib::user_account_exists;
+use relay_types::{actor_user_id, payload_value, to_timestamp};
 
 impl Handler {
     pub(super) async fn create_friend_request(
@@ -160,7 +161,7 @@ impl Handler {
                             addressee_user_id: user_id.to_string(),
                             created_at: now.to_rfc3339(),
                             status: "pending".to_string(),
-                        })),
+                        })?),
                     };
                     outbox_event::Entity::insert(friend_request_created_event)
                         .exec(txn)

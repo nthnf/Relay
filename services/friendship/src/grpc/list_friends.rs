@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::entity::friendship_edge;
 
 use super::handler::Handler;
-use super::lib::{actor_user_id, to_timestamp};
+use relay_types::{actor_user_id, to_timestamp};
 
 impl Handler {
     pub(super) async fn list_friends(

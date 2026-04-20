@@ -1,9 +1,10 @@
 use friendship::{amqp, config::Config, db, grpc::FriendshipServer};
+use std::error::Error;
 use std::sync::Arc;
 use tonic::transport::Server;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let config = Config::from_env()?;
     let db = db::connect(&config.db_url).await?;
     let grpc = async {

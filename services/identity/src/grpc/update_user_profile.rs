@@ -81,7 +81,7 @@ impl Handler {
                             display_name: display_name.clone(),
                             avatar_url: final_avatar_url.clone(),
                             updated_at: now.to_rfc3339(),
-                        })),
+                        })?),
                     };
                     outbox_event::Entity::insert(event).exec(txn).await.map_err(|e| {
                         error!(error = %e, "identity update user profile outbox insert failed");

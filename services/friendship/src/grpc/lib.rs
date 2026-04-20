@@ -1,34 +1,8 @@
 use sea_orm::{ConnectionTrait, EntityTrait};
-use tonic::{Request, Status};
+use tonic::Status;
 use uuid::Uuid;
 
 use crate::entity::user_account;
-
-pub(super) const ACTOR_USER_ID_METADATA: &str = "x-user-id";
-
-pub(super) fn actor_user_id<T>(request: &Request<T>) -> Result<Uuid, Status> {
-    let raw = request
-        .metadata()
-        .get(ACTOR_USER_ID_METADATA)
-        .ok_or_else(|| Status::unauthenticated("missing authenticated actor context"))?;
-
-    let raw = raw
-        .to_str()
-        .map_err(|_| Status::unauthenticated("invalid authenticated actor context"))?;
-
-    Uuid::parse_str(raw).map_err(|_| Status::unauthenticated("invalid authenticated actor context"))
-}
-
-pub(super) fn payload_value<T: serde::Serialize>(payload: T) -> serde_json::Value {
-    serde_json::to_value(payload).expect("event payload should serialize")
-}
-
-pub(super) fn to_timestamp(dt: chrono::DateTime<chrono::Utc>) -> prost_types::Timestamp {
-    prost_types::Timestamp {
-        seconds: dt.timestamp(),
-        nanos: dt.timestamp_subsec_nanos() as i32,
-    }
-}
 
 pub(super) async fn user_account_exists<C>(db: &C, user_id: Uuid) -> Result<bool, Status>
 where
@@ -48,6 +22,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use relay_types::{ACTOR_USER_ID_METADATA, actor_user_id, payload_value, to_timestamp};
+    use tonic::Request;
 
     #[test]
     fn actor_user_id_reads_metadata() {
@@ -71,7 +47,7 @@ mod tests {
 
     #[test]
     fn payload_value_serializes_json() {
-        let value = payload_value(serde_json::json!({"hello": "world"}));
+        let value = payload_value(serde_json::json!({"hello": "world"})).expect("serialize");
         assert_eq!(value["hello"], "world");
     }
 

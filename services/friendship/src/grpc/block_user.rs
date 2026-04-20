@@ -16,7 +16,8 @@ use crate::{
 };
 
 use super::handler::Handler;
-use super::lib::{actor_user_id, payload_value, to_timestamp, user_account_exists};
+use super::lib::user_account_exists;
+use relay_types::{actor_user_id, payload_value, to_timestamp};
 
 impl Handler {
     pub(super) async fn block_user(
@@ -131,7 +132,7 @@ impl Handler {
                                 ],
                                 removed_at: now.to_rfc3339(),
                                 reason: "blocked".to_string(),
-                            })),
+                            })?),
                         };
                         outbox_event::Entity::insert(friendship_removed_event)
                             .exec(txn)
@@ -160,7 +161,7 @@ impl Handler {
                             blocker_user_id: actor_user_id.to_string(),
                             blocked_user_id: target_user_id.to_string(),
                             blocked_at: now.to_rfc3339(),
-                        })),
+                        })?),
                     };
                     outbox_event::Entity::insert(blocked_event)
                         .exec(txn)
@@ -249,7 +250,7 @@ where
             blocked_by_user_id: blocked_by_user_id.to_string(),
             canceled_at: now.to_rfc3339(),
             status: "canceled_by_block".to_string(),
-        })),
+        })?),
     };
     outbox_event::Entity::insert(canceled_by_block_event)
         .exec(txn)
