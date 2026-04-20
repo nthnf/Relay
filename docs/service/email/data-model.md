@@ -22,7 +22,7 @@ One row per durable email intent accepted by the email service.
 | `subject` | `text` | Resolved message subject stored for audit and resend consistency. |
 | `body_text` | `text` | Resolved text body sent to the provider. |
 | `body_html` | `text null` | Optional resolved HTML body sent to the provider. |
-| `source_event_type` | `text` | Consumed event contract, such as `VerificationEmailRequested` or `WorkspaceInvitationIssued`. |
+| `source_event_type` | `text` | Consumed event contract, such as `VerificationEmailRequested`. |
 | `source_event_id` | `text` | Producer event identifier or broker message identifier used for traceability. |
 | `source_occurred_at` | `timestamptz` | Upstream event occurrence time carried into local state. |
 | `send_status` | `text` | Contract values: `pending`, `submitted`, `retryable_failure`, `failed`. |

@@ -79,36 +79,36 @@ impl WorkspaceService for Handler {
 
     async fn issue_invitation(
         &self,
-        _request: Request<IssueInvitationRequest>,
+        request: Request<IssueInvitationRequest>,
     ) -> Result<Response<IssueInvitationResponse>, Status> {
-        todo!()
+        self.issue_invitation(request).await
     }
 
     async fn accept_invitation(
         &self,
-        _request: Request<AcceptInvitationRequest>,
+        request: Request<AcceptInvitationRequest>,
     ) -> Result<Response<AcceptInvitationResponse>, Status> {
-        todo!()
+        self.accept_invitation(request).await
     }
 
     async fn create_invite_link(
         &self,
-        _request: Request<CreateInviteLinkRequest>,
+        request: Request<CreateInviteLinkRequest>,
     ) -> Result<Response<CreateInviteLinkResponse>, Status> {
-        todo!()
+        self.create_invite_link(request).await
     }
 
     async fn join_workspace_by_invite_link(
         &self,
-        _request: Request<JoinWorkspaceByInviteLinkRequest>,
+        request: Request<JoinWorkspaceByInviteLinkRequest>,
     ) -> Result<Response<JoinWorkspaceByInviteLinkResponse>, Status> {
-        todo!()
+        self.join_workspace_by_invite_link(request).await
     }
 
     async fn revoke_invite_link(
         &self,
-        _request: Request<RevokeInviteLinkRequest>,
+        request: Request<RevokeInviteLinkRequest>,
     ) -> Result<Response<RevokeInviteLinkResponse>, Status> {
-        todo!()
+        self.revoke_invite_link(request).await
     }
 }

@@ -109,6 +109,7 @@ impl Handler {
                         return Err(Status::permission_denied("Insufficient permissions"));
                     };
 
+                    // Get "Member" role
                     let member_role = workspace_role::Entity::find()
                         .filter(workspace_role::Column::WorkspaceId.eq(workspace_id))
                         .filter(workspace_role::Column::Name.eq("Member".to_string()))

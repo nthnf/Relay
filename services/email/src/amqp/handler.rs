@@ -1,5 +1,5 @@
 use crate::entity::{email_delivery_attempt, outbound_email};
-use crate::events::{EmailEvent, VerificationEmailRequested, WorkspaceInvitationIssued};
+use crate::events::{EmailEvent, VerificationEmailRequested};
 use crate::smtp::{SmtpClient, SmtpError};
 use chrono::{DateTime, Utc};
 use lapin::message::Delivery;
@@ -71,9 +71,6 @@ impl Handler {
             EmailEvent::VerificationEmailRequested(payload) => {
                 self.handle_verification_email_requested(payload).await
             }
-            EmailEvent::WorkspaceInvitationIssued(payload) => {
-                self.handle_workspace_invitation_issued(payload).await
-            }
         }
     }
 
@@ -127,62 +124,6 @@ impl Handler {
         Ok(())
     }
 
-    async fn handle_workspace_invitation_issued(
-        &self,
-        payload: WorkspaceInvitationIssued,
-    ) -> Result<(), HandleError> {
-        let dedupe_key = format!("workspace_invitation:{}", payload.workspace_invitation_id);
-        let source_event_id = self.source_event_id("WorkspaceInvitationIssued", &payload, None);
-        let source_occurred_at = parse_timestamp(&payload.created_at)
-            .map_err(|e| HandleError::Permanent(format!("invalid created_at: {e}")))?;
-        let invitation_url = format!(
-            "{}/workspace-invitations/{}",
-            self.public_web_base_url.trim_end_matches('/'),
-            payload.workspace_invitation_id
-        );
-        let subject = format!(
-            "You are invited to join {}",
-            payload.workspace_name_snapshot
-        );
-        let body_text = format!(
-            "{} invited you to join {} on Relay.\n\nAccept the invitation here:\n{}\n\nThis invitation expires at {}.\n",
-            payload.inviter_display_name_snapshot,
-            payload.workspace_name_snapshot,
-            invitation_url,
-            payload.expires_at
-        );
-        let body_html = Some(format!(
-            "<p>{} invited you to join <strong>{}</strong> on Relay.</p><p><a href=\"{}\">Accept the invitation</a></p><p>This invitation expires at {}.</p>",
-            payload.inviter_display_name_snapshot,
-            payload.workspace_name_snapshot,
-            invitation_url,
-            payload.expires_at
-        ));
-
-        let outbound = self
-            .insert_outbound_email(NewOutboundEmail {
-                dedupe_key,
-                email_kind: "workspace_invitation".to_string(),
-                recipient_user_id: None,
-                recipient_email: payload.invitee_email.clone(),
-                template_key: "workspace-invitation-v1".to_string(),
-                template_version: 1,
-                subject,
-                body_text,
-                body_html,
-                source_event_type: "WorkspaceInvitationIssued".to_string(),
-                source_event_id,
-                source_occurred_at,
-            })
-            .await?;
-
-        if let Some(outbound) = outbound {
-            self.send_and_record(outbound).await?;
-        }
-
-        Ok(())
-    }
-
     fn parse_event(&self, delivery: &Delivery) -> Result<EmailEvent, HandleError> {
         match delivery.routing_key.as_str() {
             "identity.VerificationEmailRequested" => {
@@ -191,13 +132,6 @@ impl Handler {
                         HandleError::Permanent(format!("failed to parse verification event: {e}"))
                     })?;
                 Ok(EmailEvent::VerificationEmailRequested(payload))
-            }
-            "workspace.WorkspaceInvitationIssued" => {
-                let payload: WorkspaceInvitationIssued = serde_json::from_slice(&delivery.data)
-                    .map_err(|e| {
-                        HandleError::Permanent(format!("failed to parse workspace event: {e}"))
-                    })?;
-                Ok(EmailEvent::WorkspaceInvitationIssued(payload))
             }
             other => Err(HandleError::Permanent(format!(
                 "unknown routing key: {other}"
@@ -438,12 +372,6 @@ trait EventIdFallback {
 impl EventIdFallback for VerificationEmailRequested {
     fn fallback_event_id(&self, _event_type: &str) -> String {
         self.verification_token_id.clone()
-    }
-}
-
-impl EventIdFallback for WorkspaceInvitationIssued {
-    fn fallback_event_id(&self, _event_type: &str) -> String {
-        self.workspace_invitation_id.clone()
     }
 }
 

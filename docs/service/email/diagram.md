@@ -2,7 +2,7 @@
 
 ```mermaid
 flowchart LR
-    RabbitMQ[RabbitMQ] -->|UserRegistered / WorkspaceInvitationIssued| Email[email]
+    RabbitMQ[RabbitMQ] -->|UserRegistered| Email[email]
 
     subgraph Email DB
         OE[(outbound_email)]

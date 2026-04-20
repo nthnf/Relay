@@ -62,13 +62,13 @@ pub async fn run(
     let consumer = channel
         .basic_consume(
             QUEUE.into(),
-            "friendship-service".into(),
+            "workspace-service".into(),
             BasicConsumeOptions::default(),
             FieldTable::default(),
         )
         .await?;
 
-    info!(exchange = "relay.events", "friendship amqp started");
+    info!(exchange = "relay.events", "workspace amqp started");
 
     consumer.set_delegate(move |delivery: DeliveryResult| {
         let handler = handler.clone();

@@ -28,39 +28,13 @@ Email consumes durable integration events from RabbitMQ and records local send s
 - Render the verification email directly from the consumed payload without an identity lookup.
 - Attempt provider submission and record one `email_delivery_attempt` row per send try.
 
-### `WorkspaceInvitationIssued`
-
-**When consumed**
-
-- After workspace durably creates a pending invitation.
-- Email uses this event to enqueue the invitation email only while the invitation is still the workspace-owned source of truth.
-
-**Minimum payload needed by email**
-
-- `workspace_invitation_id`
-- `workspace_id`
-- `workspace_name_snapshot`
-- `issued_by_user_id`
-- `inviter_display_name_snapshot`
-- `invitee_email`
-- `workspace_invitation_id` is also the v1 link material needed for the signed-in external application acceptance flow
-- `expires_at`
-- `created_at`
-
-**Local effect**
-
-- Create or idempotently reuse one `outbound_email` row with `email_kind = workspace_invitation`.
-- Render a concrete workspace invitation email directly from the consumed event payload without cross-service lookups from email.
-- Attempt provider submission and record one `email_delivery_attempt` row per send try.
-
 ## Event Rules
 
 - Email is consume-only in v1 for durable events; no `EmailDelivered`, `EmailBounced`, or similar integration events are published yet.
-- The v1 event scope is limited to registration verification and workspace invitation flows.
+- The v1 event scope is limited to registration verification.
 - Password-reset triggers are explicitly out of scope for v1.
 - `VerificationEmailRequested` must carry `verification_token`, `verification_token_id`, and `verification_token_expires_at` so email can build the verification link without hidden lookup behavior.
 - `reason` values are `registration`, `authenticate_unverified`, and `resend_request`.
-- `WorkspaceInvitationIssued` must be self-contained enough for delivery and rendering in email; email should not depend on identity or workspace read-side lookups to build the invitation message in v1.
 - Consumers must be idempotent because RabbitMQ replay and duplicate delivery are expected platform behaviors.
 - Duplicate delivery of the same consumed event is a no-op for outbound intent creation and immediate send behavior when a matching `outbound_email` row already exists.
 - Duplicate broker delivery must not trigger a resend if the existing `outbound_email` row is already queued, submitted, retryable, or terminal.

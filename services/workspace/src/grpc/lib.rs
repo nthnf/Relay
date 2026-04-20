@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::entity::user_snapshot;
 
+#[allow(dead_code)]
 pub(super) mod permission {
     use std::convert::TryFrom;
 

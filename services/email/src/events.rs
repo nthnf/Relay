@@ -11,20 +11,7 @@ pub struct VerificationEmailRequested {
     pub requested_at: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct WorkspaceInvitationIssued {
-    pub workspace_id: String,
-    pub workspace_invitation_id: String,
-    pub workspace_name_snapshot: String,
-    pub issued_by_user_id: String,
-    pub inviter_display_name_snapshot: String,
-    pub invitee_email: String,
-    pub expires_at: String,
-    pub created_at: String,
-}
-
 #[derive(Debug)]
 pub enum EmailEvent {
     VerificationEmailRequested(VerificationEmailRequested),
-    WorkspaceInvitationIssued(WorkspaceInvitationIssued),
 }

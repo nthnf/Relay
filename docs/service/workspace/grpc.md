@@ -234,3 +234,27 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 - Reject if the invitation is not `pending` or if `expires_at` has passed.
 - Reject or return idempotent success if the invited user is already an active member before acceptance.
 - On success, mark the invitation accepted, create the `workspace_member` row with `added_by_user_id = issued_by_user_id`, and insert `WorkspaceInvitationAccepted` plus `WorkspaceMemberAdded` outbox rows in one transaction.
+
+### `JoinWorkspaceByInviteLink`
+
+**Main caller:** external application server through Envoy Gateway
+
+**Request fields**
+
+- `code` (`string`) - opaque bearer token from the invite link URL.
+
+**Response fields**
+
+- `workspace_id` (`uuid`)
+- `workspace_invite_link_id` (`uuid`)
+- `user_id` (`uuid`)
+- `joined_at` (`timestamp`)
+- `added_by_user_id` (`uuid`) - set to the joining user for bearer-link redemption.
+
+**Contract notes**
+
+- Any authenticated user with a valid invite-link code may redeem it.
+- Reject if the link is not `active`, expired, or exhausted.
+- Reject if the joining user is already an active member.
+- If the joining user exists with `membership_status = removed`, reactivate the same row and recreate the baseline member-role assignment.
+- On success, increment `workspace_invite_link.use_count`, set the link to `expired` when `max_uses` is reached, create or reactivate the `workspace_member` row with `added_by_user_id = joining user`, and insert `WorkspaceMemberAdded` in one transaction.

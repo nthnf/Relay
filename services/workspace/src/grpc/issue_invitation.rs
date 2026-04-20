@@ -1,20 +1,25 @@
 use chrono::{Duration, Utc};
 use relay_proto::workspace::{IssueInvitationRequest, IssueInvitationResponse};
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, Set, TransactionError, TransactionTrait};
+use sea_orm::{
+    ColumnTrait, EntityTrait, JoinType, QueryFilter, QuerySelect, RelationTrait, Set,
+    TransactionError, TransactionTrait,
+};
 use tonic::{Request, Response, Status};
 use tracing::error;
 use uuid::Uuid;
 
 use crate::{
     entity::{
-        workspace, workspace_invitation, workspace_member, workspace_member_role, workspace_role,
+        outbox_event, user_snapshot, workspace, workspace_invitation, workspace_member,
+        workspace_member_role, workspace_role,
     },
+    events::WorkspaceInvitationIssuedPayload,
     grpc::lib::user_account_exists,
 };
 
 use super::handler::Handler;
 use super::lib::permission;
-use relay_types::actor_user_id;
+use relay_types::{actor_user_id, payload_value, to_timestamp};
 
 impl Handler {
     pub(super) async fn issue_invitation(
@@ -59,31 +64,39 @@ impl Handler {
                             Status::internal("Internal Server Error")
                         })?;
 
-                    match workspace {
+                    let workspace_name_snapshot = match workspace {
                         Some(workspace) => {
                             if workspace.archived_at.is_some() {
                                 return Err(Status::failed_precondition("Invalid workspace"));
                             }
+                            workspace.name.clone()
                         }
                         None => {
                             return Err(Status::not_found("Workspace not found"));
                         }
                     };
 
-                    // Check actor is active workspace member.
-                    let actor_member = workspace_member::Entity::find()
+                    // Check actor is active workspace member and load profile snapshot.
+                    let inviter_display_name_snapshot = workspace_member::Entity::find()
+                        .join(
+                            JoinType::InnerJoin,
+                            workspace_member::Relation::UserSnapshot1.def(),
+                        )
+                        .select_only()
+                        .column(user_snapshot::Column::DisplayName)
                         .filter(workspace_member::Column::UserId.eq(actor_user_id))
                         .filter(workspace_member::Column::WorkspaceId.eq(workspace_id))
                         .filter(workspace_member::Column::MembershipStatus.eq("active"))
+                        .into_tuple::<String>()
                         .one(txn)
                         .await
                         .map_err(|e| {
                             error!(error = %e, "Workspace member lookup failed");
                             Status::internal("Internal Server Error")
                         })?;
-                    if actor_member.is_none() {
+                    let Some(inviter_display_name_snapshot) = inviter_display_name_snapshot else {
                         return Err(Status::not_found("Workspace not found"));
-                    }
+                    };
 
                     // Get actor workspace roles.
                     let member_role_joins = workspace_member_role::Entity::find()
@@ -169,47 +182,55 @@ impl Handler {
                         })?;
 
                     // Insert workspace invitation issued event
-                    // let event = outbox_event::ActiveModel {
-                    //     event_id: Set(Uuid::new_v4()),
-                    //     aggregate_type: Set("workspace_member".to_string()),
-                    //     aggregate_id: Set(workspace_id),
-                    //     event_type: Set("WorkspaceMemberAdded".to_string()),
-                    //     created_at: Set(now.into()),
-                    //     available_at: Set(now.into()),
-                    //     occurred_at: Set(now.into()),
-                    //     claimed_at: Set(None),
-                    //     claimed_by: Set(None),
-                    //     published_at: Set(None),
-                    //     last_error: Set(None),
-                    //     publish_attempts: Set(0),
-                    //     status: Set("pending".to_string()),
-                    //     payload: Set(payload_value(WorkspaceInvitationIssuedPayload {
-                    //         workspace_invitation_id: workspace_invitation_id.to_string(),
-                    //         workspace_id: workspace_id.to_string(),
-                    //         issued_to_user_id: target_user_id.to_string(),
-                    //         issued_by_user_id: actor_user_id.to_string(),
-                    //         expires_at: expires_at.to_rfc3339(),
-                    //         created_at: now.to_rfc3339(),
-                    //         inviter_display_name_snapshot: inviter_display_name_snapshot
-                    //             .to_string(),
-                    //         workspace_name_snapshot: workspace_name_snapshot.to_string(),
-                    //     })?),
-                    // };
-                    // outbox_event::Entity::insert(event)
-                    //     .exec(txn)
-                    //     .await
-                    //     .map_err(|e| {
-                    //         error!(error = %e, "Workspace member added event insert failed");
-                    //         Status::internal("Internal Server Error")
-                    //     })?;
+                    let event = outbox_event::ActiveModel {
+                        event_id: Set(Uuid::new_v4()),
+                        aggregate_type: Set("workspace_invitation".to_string()),
+                        aggregate_id: Set(workspace_invitation_id),
+                        event_type: Set("WorkspaceInvitationIssued".to_string()),
+                        created_at: Set(now.into()),
+                        available_at: Set(now.into()),
+                        occurred_at: Set(now.into()),
+                        claimed_at: Set(None),
+                        claimed_by: Set(None),
+                        published_at: Set(None),
+                        last_error: Set(None),
+                        publish_attempts: Set(0),
+                        status: Set("pending".to_string()),
+                        payload: Set(payload_value(WorkspaceInvitationIssuedPayload {
+                            workspace_invitation_id: workspace_invitation_id.to_string(),
+                            workspace_id: workspace_id.to_string(),
+                            issued_to_user_id: target_user_id.to_string(),
+                            issued_by_user_id: actor_user_id.to_string(),
+                            expires_at: expires_at.to_rfc3339(),
+                            created_at: now.to_rfc3339(),
+                            inviter_display_name_snapshot: inviter_display_name_snapshot
+                                .to_string(),
+                            workspace_name_snapshot: workspace_name_snapshot.to_string(),
+                        })?),
+                    };
+                    outbox_event::Entity::insert(event)
+                        .exec(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "Workspace invitation event insert failed");
+                            Status::internal("Internal Server Error")
+                        })?;
 
-                    todo!()
+                    Ok(Response::new(IssueInvitationResponse {
+                        workspace_invitation_id: workspace_invitation_id.to_string(),
+                        workspace_id: workspace_id.to_string(),
+                        issued_to_user_id: target_user_id.to_string(),
+                        issued_by_user_id: actor_user_id.to_string(),
+                        status: "pending".to_string(),
+                        created_at: Some(to_timestamp(now)),
+                        expires_at: Some(to_timestamp(expires_at)),
+                    }))
                 })
             })
             .await
             .map_err(|e| match e {
                 TransactionError::Connection(db_err) => {
-                    error!(error = %db_err, "Workspace add member transaction connection failure");
+                    error!(error = %db_err, "Workspace invitation transaction connection failure");
                     Status::internal("Internal Server Error")
                 }
                 TransactionError::Transaction(status) => status,
