@@ -12,7 +12,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_env() -> Result<Self, Box<dyn Error>> {
+    pub fn from_env() -> Result<Self, Box<dyn Error + Send + Sync>> {
         dotenvy::dotenv()?;
         Ok(Self {
             db_url: std::env::var("DATABASE_URL")?,

@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "crates/relay-config",
+  "crates/relay-amqp",
   "crates/relay-errors",
   "crates/relay-proto",
   "crates/relay-telemetry",
@@ -38,6 +39,7 @@ sea-orm-migration = { version = "2.0.0-rc.38", features = [
 tonic = "0.14.5"
 tonic-prost = "0.14.5"
 tonic-prost-build = "0.14.5"
+async-trait = "0.1.89"
 prost = "0.14.3"
 prost-types = "0.14.3"
 uuid = { version = "1.23.0", features = ["v4"] }
@@ -54,5 +56,6 @@ serde_json = "1"
 relay-proto = { path = "./crates/relay-proto" }
 relay-errors = { path = "./crates/relay-errors" }
 relay-config = { path = "./crates/relay-config" }
+relay-amqp = { path = "./crates/relay-amqp" }
 relay-telemetry = { path = "./crates/relay-telemetry" }
 relay-types = { path = "./crates/relay-types" }

@@ -1,3 +1,4 @@
+use crate::auth::AuthKeys;
 use envoy_types::ext_authz::v3::pb::{
     Authorization, AuthorizationServer, CheckRequest, CheckResponse,
 };
@@ -9,10 +10,9 @@ use relay_proto::identity::{
     ResendVerificationEmailRequest, ResendVerificationEmailResponse, RevokeSessionRequest,
     RevokeSessionResponse, TokenPairResponse, UpdateUserProfileRequest, UpdateUserProfileResponse,
 };
+pub(super) use relay_types::{actor_user_id, payload_value, to_timestamp};
 use sea_orm::DatabaseConnection;
 use tonic::{Request, Response, Status};
-use crate::auth::AuthKeys;
-pub(super) use relay_types::{actor_user_id, payload_value, to_timestamp};
 
 pub(super) const EMAIL_NORMALIZED_CONSTRAINT: &str = "uq-user-account-email-normalized";
 pub(super) const USERNAME_CONSTRAINT: &str = "uq-user-profile-username";

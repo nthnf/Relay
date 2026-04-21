@@ -2,24 +2,25 @@ extern crate workspace as workspace_crate;
 
 use chrono::Duration;
 use relay_proto::workspace::workspace_service_client::WorkspaceServiceClient;
-use relay_proto::workspace::{CreateInviteLinkRequest, CreateWorkspaceRequest, JoinWorkspaceByInviteLinkRequest};
+use relay_proto::workspace::{
+    CreateInviteLinkRequest, CreateWorkspaceRequest, JoinWorkspaceByInviteLinkRequest,
+};
 use sea_orm::{
-    ActiveValue::Set, ColumnTrait, ConnectionTrait, Database, EntityTrait, QueryFilter,
-    QueryOrder,
+    ActiveValue::Set, ColumnTrait, ConnectionTrait, Database, EntityTrait, QueryFilter, QueryOrder,
 };
 use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
-use tonic::{metadata::MetadataValue, transport::Server, Request};
+use tonic::{Request, metadata::MetadataValue, transport::Server};
 use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
+use relay_types::to_timestamp;
 use workspace_crate::{
     entity::{outbox_event, user_snapshot, workspace_invite_link, workspace_member},
     grpc::WorkspaceServer,
 };
-use relay_types::to_timestamp;
 
 const ACTOR_USER_ID_METADATA: &str = "x-user-id";
 
@@ -75,7 +76,10 @@ async fn join_workspace_by_invite_link_creates_membership_and_updates_use_count(
     assert_eq!(response.workspace_id, created.workspace_id);
     assert_eq!(response.user_id, joiner_user_id.to_string());
     assert_eq!(response.added_by_user_id, joiner_user_id.to_string());
-    assert_eq!(response.workspace_invite_link_id, link.workspace_invite_link_id);
+    assert_eq!(
+        response.workspace_invite_link_id,
+        link.workspace_invite_link_id
+    );
 
     let workspace_id = Uuid::parse_str(&created.workspace_id)?;
     let link_id = Uuid::parse_str(&link.workspace_invite_link_id)?;

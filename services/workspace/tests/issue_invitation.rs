@@ -7,7 +7,7 @@ use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
-use tonic::{metadata::MetadataValue, transport::Server, Request};
+use tonic::{Request, metadata::MetadataValue, transport::Server};
 use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
@@ -63,12 +63,11 @@ async fn issue_invitation_persists_invitation_and_outbox_event()
     let workspace_invitation_id = Uuid::parse_str(&response.workspace_invitation_id)?;
     let workspace_id = Uuid::parse_str(&created.workspace_id)?;
 
-    let invitation_row: workspace_invitation::Model = workspace_invitation::Entity::find_by_id(
-        workspace_invitation_id,
-    )
-    .one(&env.db)
-    .await?
-    .expect("workspace invitation row");
+    let invitation_row: workspace_invitation::Model =
+        workspace_invitation::Entity::find_by_id(workspace_invitation_id)
+            .one(&env.db)
+            .await?
+            .expect("workspace invitation row");
     assert_eq!(invitation_row.workspace_id, workspace_id);
     assert_eq!(invitation_row.issued_to_user_id, target_user_id);
     assert_eq!(invitation_row.issued_by_user_id, actor_user_id);
@@ -82,12 +81,24 @@ async fn issue_invitation_persists_invitation_and_outbox_event()
         .await?
         .expect("workspace invitation outbox row");
 
-    assert_eq!(outbox_row.payload["workspace_invitation_id"], response.workspace_invitation_id);
+    assert_eq!(
+        outbox_row.payload["workspace_invitation_id"],
+        response.workspace_invitation_id
+    );
     assert_eq!(outbox_row.payload["workspace_id"], created.workspace_id);
-    assert_eq!(outbox_row.payload["issued_to_user_id"], target_user_id.to_string());
-    assert_eq!(outbox_row.payload["issued_by_user_id"], actor_user_id.to_string());
+    assert_eq!(
+        outbox_row.payload["issued_to_user_id"],
+        target_user_id.to_string()
+    );
+    assert_eq!(
+        outbox_row.payload["issued_by_user_id"],
+        actor_user_id.to_string()
+    );
     assert_eq!(outbox_row.payload["workspace_name_snapshot"], "Acme");
-    assert_eq!(outbox_row.payload["inviter_display_name_snapshot"], "Test User");
+    assert_eq!(
+        outbox_row.payload["inviter_display_name_snapshot"],
+        "Test User"
+    );
 
     env.shutdown().await;
     Ok(())

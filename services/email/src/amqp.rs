@@ -2,33 +2,16 @@ use crate::entity::{email_delivery_attempt, outbound_email};
 use crate::events::{EmailEvent, VerificationEmailRequested};
 use crate::smtp::{SmtpClient, SmtpError};
 use chrono::{DateTime, Utc};
-use lapin::message::Delivery;
-use lapin::types::AMQPValue;
-use lapin::types::FieldTable;
+use relay_amqp::{
+    DeliveryContext, EventHandleError, EventHandleResult, RegisteredSubscriber,
+    RegistersAmqpRoutes, route,
+};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
     Set,
 };
 use std::sync::Arc;
 use uuid::Uuid;
-
-#[derive(Debug)]
-pub enum HandleError {
-    Permanent(String),
-    Transient(String),
-}
-
-impl std::fmt::Display for HandleError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            HandleError::Permanent(message) | HandleError::Transient(message) => {
-                f.write_str(message)
-            }
-        }
-    }
-}
-
-impl std::error::Error for HandleError {}
 
 #[derive(Clone)]
 pub struct Handler {
@@ -37,6 +20,8 @@ pub struct Handler {
     smtp_provider_name: String,
     smtp: SmtpClient,
 }
+
+pub use Handler as AmqpHandler;
 
 impl Handler {
     pub fn new(
@@ -53,38 +38,19 @@ impl Handler {
         }
     }
 
-    pub(crate) async fn handle_delivery(&self, delivery: &Delivery) -> Result<(), HandleError> {
-        let event = self.parse_event(delivery)?;
-        self.handle_email_event(event).await
-    }
-
-    pub async fn handle_email_event(&self, event: EmailEvent) -> Result<(), HandleError> {
-        self.handle_event(event).await
-    }
-
-    pub async fn run(self: Arc<Self>, amqp_addr: String) -> Result<(), Box<dyn std::error::Error>> {
-        crate::amqp::run(self, amqp_addr).await
-    }
-
-    async fn handle_event(&self, event: EmailEvent) -> Result<(), HandleError> {
-        match event {
-            EmailEvent::VerificationEmailRequested(payload) => {
-                self.handle_verification_email_requested(payload).await
-            }
-        }
-    }
-
-    async fn handle_verification_email_requested(
-        &self,
+    pub(super) async fn handle_verification_email_requested(
+        self: Arc<Self>,
+        delivery: DeliveryContext,
         payload: VerificationEmailRequested,
-    ) -> Result<(), HandleError> {
+    ) -> EventHandleResult {
         let dedupe_key = format!(
             "verification_email:{}:{}",
             payload.verification_token_id, payload.reason
         );
-        let source_event_id = self.source_event_id("VerificationEmailRequested", &payload, None);
+        let source_event_id =
+            self.source_event_id("VerificationEmailRequested", &payload, &delivery);
         let source_occurred_at = parse_timestamp(&payload.requested_at)
-            .map_err(|e| HandleError::Permanent(format!("invalid requested_at: {e}")))?;
+            .map_err(|e| EventHandleError::Permanent(format!("invalid requested_at: {e}")))?;
         let verification_url = format!(
             "{}/verify-email?token={}",
             self.public_web_base_url.trim_end_matches('/'),
@@ -124,30 +90,26 @@ impl Handler {
         Ok(())
     }
 
-    fn parse_event(&self, delivery: &Delivery) -> Result<EmailEvent, HandleError> {
-        match delivery.routing_key.as_str() {
-            "identity.VerificationEmailRequested" => {
-                let payload: VerificationEmailRequested = serde_json::from_slice(&delivery.data)
-                    .map_err(|e| {
-                        HandleError::Permanent(format!("failed to parse verification event: {e}"))
-                    })?;
-                Ok(EmailEvent::VerificationEmailRequested(payload))
+    pub async fn handle_email_event(&self, event: EmailEvent) -> EventHandleResult {
+        let delivery = DeliveryContext::default();
+        match event {
+            EmailEvent::VerificationEmailRequested(payload) => {
+                Arc::new(self.clone())
+                    .handle_verification_email_requested(delivery, payload)
+                    .await
             }
-            other => Err(HandleError::Permanent(format!(
-                "unknown routing key: {other}"
-            ))),
         }
     }
 
     async fn insert_outbound_email(
         &self,
         new_email: NewOutboundEmail,
-    ) -> Result<Option<outbound_email::Model>, HandleError> {
+    ) -> Result<Option<outbound_email::Model>, EventHandleError> {
         if outbound_email::Entity::find()
             .filter(outbound_email::Column::DedupeKey.eq(&new_email.dedupe_key))
             .one(&self.db)
             .await
-            .map_err(|e| HandleError::Transient(format!("outbound lookup failed: {e}")))?
+            .map_err(|e| EventHandleError::Transient(format!("outbound lookup failed: {e}")))?
             .is_some()
         {
             return Ok(None);
@@ -179,12 +141,12 @@ impl Handler {
         }
         .insert(&self.db)
         .await
-        .map_err(|e| HandleError::Transient(format!("outbound insert failed: {e}")))?;
+        .map_err(|e| EventHandleError::Transient(format!("outbound insert failed: {e}")))?;
 
         Ok(Some(model))
     }
 
-    async fn send_and_record(&self, outbound: outbound_email::Model) -> Result<(), HandleError> {
+    async fn send_and_record(&self, outbound: outbound_email::Model) -> EventHandleResult {
         let attempted_at = Utc::now();
         let attempt_number = self.next_attempt_number(outbound.id).await?;
         let send_result = self.send_email(&outbound).await;
@@ -207,7 +169,7 @@ impl Handler {
                 }
                 .insert(&self.db)
                 .await
-                .map_err(|e| HandleError::Transient(format!("attempt insert failed: {e}")))?;
+                .map_err(|e| EventHandleError::Transient(format!("attempt insert failed: {e}")))?;
 
                 let mut active = outbound.into_active_model();
                 active.provider_message_id = Set(None);
@@ -217,10 +179,9 @@ impl Handler {
                 active.last_error_message = Set(None);
                 active.next_attempt_after = Set(None);
                 active.updated_at = Set(Utc::now().into());
-                active
-                    .update(&self.db)
-                    .await
-                    .map_err(|e| HandleError::Transient(format!("outbound update failed: {e}")))?;
+                active.update(&self.db).await.map_err(|e| {
+                    EventHandleError::Transient(format!("outbound update failed: {e}"))
+                })?;
                 Ok(())
             }
             Err((status, code, message, retry_after, kind)) => {
@@ -240,7 +201,7 @@ impl Handler {
                 }
                 .insert(&self.db)
                 .await
-                .map_err(|e| HandleError::Transient(format!("attempt insert failed: {e}")))?;
+                .map_err(|e| EventHandleError::Transient(format!("attempt insert failed: {e}")))?;
 
                 let mut active = outbound.into_active_model();
                 active.provider_name = Set(Some(self.smtp_provider_name.clone()));
@@ -249,21 +210,20 @@ impl Handler {
                 active.last_error_message = Set(Some(message));
                 active.next_attempt_after = Set(retry_after.map(Into::into));
                 active.updated_at = Set(Utc::now().into());
-                active
-                    .update(&self.db)
-                    .await
-                    .map_err(|e| HandleError::Transient(format!("outbound update failed: {e}")))?;
+                active.update(&self.db).await.map_err(|e| {
+                    EventHandleError::Transient(format!("outbound update failed: {e}"))
+                })?;
                 Err(kind)
             }
         }
     }
 
-    async fn next_attempt_number(&self, outbound_email_id: Uuid) -> Result<i32, HandleError> {
+    async fn next_attempt_number(&self, outbound_email_id: Uuid) -> Result<i32, EventHandleError> {
         let attempts = email_delivery_attempt::Entity::find()
             .filter(email_delivery_attempt::Column::OutboundEmailId.eq(outbound_email_id))
             .all(&self.db)
             .await
-            .map_err(|e| HandleError::Transient(format!("attempt lookup failed: {e}")))?;
+            .map_err(|e| EventHandleError::Transient(format!("attempt lookup failed: {e}")))?;
 
         Ok(attempts
             .iter()
@@ -283,7 +243,7 @@ impl Handler {
             Option<String>,
             String,
             Option<DateTime<Utc>>,
-            HandleError,
+            EventHandleError,
         ),
     > {
         self.smtp
@@ -295,35 +255,35 @@ impl Handler {
                     Some("invalid_sender".to_string()),
                     e,
                     None,
-                    HandleError::Permanent("invalid sender mailbox".to_string()),
+                    EventHandleError::Permanent("invalid sender mailbox".to_string()),
                 ),
                 SmtpError::InvalidRecipient(e) => (
                     "failed".to_string(),
                     Some("invalid_recipient".to_string()),
                     e,
                     None,
-                    HandleError::Permanent("invalid recipient mailbox".to_string()),
+                    EventHandleError::Permanent("invalid recipient mailbox".to_string()),
                 ),
                 SmtpError::MessageBuild(e) => (
                     "failed".to_string(),
                     Some("message_build_failed".to_string()),
                     e,
                     None,
-                    HandleError::Permanent("message build failed".to_string()),
+                    EventHandleError::Permanent("message build failed".to_string()),
                 ),
                 SmtpError::TransportConfig(e) => (
                     "retryable_failure".to_string(),
                     Some("smtp_configuration_error".to_string()),
                     e,
                     Some(Utc::now() + chrono::Duration::minutes(5)),
-                    HandleError::Transient("smtp configuration error".to_string()),
+                    EventHandleError::Transient("smtp configuration error".to_string()),
                 ),
                 SmtpError::Send(e) => (
                     "retryable_failure".to_string(),
                     Some("smtp_send_failed".to_string()),
                     e,
                     Some(Utc::now() + chrono::Duration::minutes(5)),
-                    HandleError::Transient("smtp send failed".to_string()),
+                    EventHandleError::Transient("smtp send failed".to_string()),
                 ),
             })
     }
@@ -332,18 +292,14 @@ impl Handler {
         &self,
         event_type: &str,
         payload: &T,
-        delivery: Option<&Delivery>,
+        delivery: &DeliveryContext,
     ) -> String {
-        if let Some(delivery) = delivery {
-            if let Some(message_id) = delivery.properties.message_id().as_ref() {
-                return message_id.to_string();
-            }
+        if let Some(message_id) = delivery.message_id.as_ref() {
+            return message_id.clone();
+        }
 
-            if let Some(headers) = delivery.properties.headers().as_ref()
-                && let Some(value) = header_string(headers, "event_id")
-            {
-                return value;
-            }
+        if let Some(event_id) = delivery.headers.get("event_id") {
+            return event_id.clone();
         }
 
         payload.fallback_event_id(event_type)
@@ -375,18 +331,19 @@ impl EventIdFallback for VerificationEmailRequested {
     }
 }
 
-fn parse_uuid(value: &str, field: &str) -> Result<Uuid, HandleError> {
-    Uuid::parse_str(value).map_err(|e| HandleError::Permanent(format!("invalid {field}: {e}")))
+fn parse_uuid(value: &str, field: &str) -> Result<Uuid, EventHandleError> {
+    Uuid::parse_str(value).map_err(|e| EventHandleError::Permanent(format!("invalid {field}: {e}")))
 }
 
 fn parse_timestamp(value: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
     DateTime::parse_from_rfc3339(value).map(|value| value.with_timezone(&Utc))
 }
 
-fn header_string(headers: &FieldTable, key: &str) -> Option<String> {
-    headers.inner().get(key).and_then(|value| match value {
-        AMQPValue::LongString(value) => Some(value.to_string()),
-        AMQPValue::ShortString(value) => Some(value.to_string()),
-        _ => None,
-    })
+impl RegistersAmqpRoutes for Handler {
+    fn register(subscriber: RegisteredSubscriber<Self>) -> RegisteredSubscriber<Self> {
+        subscriber.event(
+            "identity.VerificationEmailRequested",
+            route(Self::handle_verification_email_requested),
+        )
+    }
 }

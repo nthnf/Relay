@@ -7,7 +7,7 @@ use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
-use tonic::{metadata::MetadataValue, transport::Server, Request};
+use tonic::{Request, metadata::MetadataValue, transport::Server};
 use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
@@ -17,8 +17,8 @@ use workspace_crate::grpc::WorkspaceServer;
 const ACTOR_USER_ID_METADATA: &str = "x-user-id";
 
 #[tokio::test]
-async fn list_channels_returns_sorted_channels_for_member()
--> Result<(), Box<dyn std::error::Error>> {
+async fn list_channels_returns_sorted_channels_for_member() -> Result<(), Box<dyn std::error::Error>>
+{
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
 
@@ -187,12 +187,10 @@ async fn connect_client(
 
 fn actor_request<T>(user_id: Uuid, request: T) -> Request<T> {
     let mut request = Request::new(request);
-    request
-        .metadata_mut()
-        .insert(
-            ACTOR_USER_ID_METADATA,
-            MetadataValue::try_from(user_id.to_string()).expect("metadata"),
-        );
+    request.metadata_mut().insert(
+        ACTOR_USER_ID_METADATA,
+        MetadataValue::try_from(user_id.to_string()).expect("metadata"),
+    );
     request
 }
 

@@ -1,8 +1,8 @@
 use std::error::Error;
-use std::sync::Arc;
 
-use workspace::{amqp, config::Config, db, grpc::WorkspaceServer};
+use relay_amqp::AmqpSubscriber;
 use tonic::transport::Server;
+use workspace::{amqp, config::Config, db, grpc::WorkspaceServer};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -19,10 +19,15 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     };
 
-    let amqp = amqp::run(
-        Arc::new(amqp::AmqpHandler::new(db.clone())),
-        config.amqp_addr.clone(),
-    );
+    let amqp = AmqpSubscriber::topic(
+        "workspace",
+        "workspace.events",
+        "workspace-service",
+        "relay.events",
+        "identity.*",
+    )
+    .handle(amqp::AmqpHandler::new(db.clone()))
+    .run(&config.amqp_addr);
 
     tokio::try_join!(grpc, amqp)?;
 

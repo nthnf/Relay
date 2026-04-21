@@ -1,5 +1,5 @@
 use chrono::Utc;
-use redis::{aio::ConnectionManager, pipe, AsyncTypedCommands, Client, RedisResult};
+use redis::{AsyncTypedCommands, Client, RedisResult, aio::ConnectionManager, pipe};
 use uuid::Uuid;
 
 const PRESENCE_TTL_SECS: i64 = 45;

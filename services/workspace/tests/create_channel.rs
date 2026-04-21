@@ -7,7 +7,7 @@ use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
-use tonic::{metadata::MetadataValue, transport::Server, Request};
+use tonic::{Request, metadata::MetadataValue, transport::Server};
 use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
@@ -60,9 +60,11 @@ async fn create_channel_allows_duplicate_names_and_appends_position()
     let workspace_id = Uuid::parse_str(&created.workspace_id)?;
     let channels: Vec<workspace_crate::entity::workspace_channel::Model> =
         workspace_crate::entity::workspace_channel::Entity::find()
-        .filter(workspace_crate::entity::workspace_channel::Column::WorkspaceId.eq(workspace_id))
-        .all(&env.db)
-        .await?;
+            .filter(
+                workspace_crate::entity::workspace_channel::Column::WorkspaceId.eq(workspace_id),
+            )
+            .all(&env.db)
+            .await?;
 
     assert_eq!(channels.len(), 2);
     assert!(channels.iter().all(|channel| channel.name == "general"));
@@ -145,12 +147,10 @@ async fn connect_client(
 
 fn actor_request<T>(user_id: Uuid, request: T) -> Request<T> {
     let mut request = Request::new(request);
-    request
-        .metadata_mut()
-        .insert(
-            ACTOR_USER_ID_METADATA,
-            MetadataValue::try_from(user_id.to_string()).expect("metadata"),
-        );
+    request.metadata_mut().insert(
+        ACTOR_USER_ID_METADATA,
+        MetadataValue::try_from(user_id.to_string()).expect("metadata"),
+    );
     request
 }
 

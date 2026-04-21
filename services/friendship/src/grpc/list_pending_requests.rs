@@ -135,7 +135,7 @@ fn encode_page_token(cursor: &friend_request::Model) -> String {
 }
 
 fn decode_page_token(page_token: &str) -> Result<RequestCursor, Status> {
-        let (created_at, request_id) = page_token
+    let (created_at, request_id) = page_token
         .split_once('|')
         .ok_or_else(|| Status::invalid_argument("Invalid page token"))?;
 
@@ -143,8 +143,8 @@ fn decode_page_token(page_token: &str) -> Result<RequestCursor, Status> {
         .map_err(|_| Status::invalid_argument("Invalid page token"))?
         .with_timezone(&Utc);
 
-        let request_id = Uuid::parse_str(request_id)
-            .map_err(|_| Status::invalid_argument("Invalid page token"))?;
+    let request_id =
+        Uuid::parse_str(request_id).map_err(|_| Status::invalid_argument("Invalid page token"))?;
 
     Ok(RequestCursor {
         created_at,

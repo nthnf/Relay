@@ -7,7 +7,7 @@ use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
-use tonic::{metadata::MetadataValue, transport::Server, Request};
+use tonic::{Request, metadata::MetadataValue, transport::Server};
 use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
@@ -19,8 +19,8 @@ use workspace_crate::{
 const ACTOR_USER_ID_METADATA: &str = "x-user-id";
 
 #[tokio::test]
-async fn remove_member_soft_deletes_membership_and_roles()
--> Result<(), Box<dyn std::error::Error>> {
+async fn remove_member_soft_deletes_membership_and_roles() -> Result<(), Box<dyn std::error::Error>>
+{
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
     let target_user_id = Uuid::new_v4();
@@ -93,15 +93,18 @@ async fn remove_member_soft_deletes_membership_and_roles()
         .await?
         .expect("removed event");
     assert_eq!(removed_event.payload["user_id"], target_user_id.to_string());
-    assert_eq!(removed_event.payload["removed_by_user_id"], actor_user_id.to_string());
+    assert_eq!(
+        removed_event.payload["removed_by_user_id"],
+        actor_user_id.to_string()
+    );
 
     env.shutdown().await;
     Ok(())
 }
 
 #[tokio::test]
-async fn remove_member_returns_false_for_missing_target()
--> Result<(), Box<dyn std::error::Error>> {
+async fn remove_member_returns_false_for_missing_target() -> Result<(), Box<dyn std::error::Error>>
+{
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
 
@@ -212,12 +215,10 @@ async fn connect_client(
 
 fn actor_request<T>(user_id: Uuid, request: T) -> Request<T> {
     let mut request = Request::new(request);
-    request
-        .metadata_mut()
-        .insert(
-            ACTOR_USER_ID_METADATA,
-            MetadataValue::try_from(user_id.to_string()).expect("metadata"),
-        );
+    request.metadata_mut().insert(
+        ACTOR_USER_ID_METADATA,
+        MetadataValue::try_from(user_id.to_string()).expect("metadata"),
+    );
     request
 }
 

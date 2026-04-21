@@ -1,6 +1,6 @@
 use chrono::Utc;
 use email::{
-    amqp::handler::Handler,
+    amqp::Handler,
     entity::{email_delivery_attempt, outbound_email},
     events::VerificationEmailRequested,
     smtp::SmtpClient,

@@ -10,10 +10,12 @@ prost-types = { workspace = true }
 tonic-prost = { workspace = true }
 sea-orm = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }
+async-trait = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 relay-proto = { workspace = true }
 relay-types = { workspace = true }
+relay-amqp = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 dotenvy = { workspace = true }

@@ -163,7 +163,6 @@ impl Store {
             }
         }
     }
-
 }
 
 #[cfg(test)]
@@ -226,5 +225,4 @@ mod tests {
                 .is_none()
         );
     }
-
 }

@@ -8,15 +8,15 @@ use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
-use tonic::{metadata::MetadataValue, transport::Server, Request};
+use tonic::{Request, metadata::MetadataValue, transport::Server};
 use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
+use relay_types::to_timestamp;
 use workspace_crate::{
     entity::{outbox_event, user_snapshot, workspace_invite_link},
     grpc::WorkspaceServer,
 };
-use relay_types::to_timestamp;
 
 const ACTOR_USER_ID_METADATA: &str = "x-user-id";
 
@@ -79,7 +79,10 @@ async fn create_invite_link_uses_future_expiry_and_rejects_past_expiry()
         .await?
         .expect("invite link outbox row");
 
-    assert_eq!(outbox_row.payload["workspace_invite_link_id"], response.workspace_invite_link_id);
+    assert_eq!(
+        outbox_row.payload["workspace_invite_link_id"],
+        response.workspace_invite_link_id
+    );
     assert_eq!(outbox_row.payload["status"], "active");
     assert_eq!(outbox_row.payload["max_uses"], 3);
     assert_eq!(outbox_row.payload["use_count"], 0);

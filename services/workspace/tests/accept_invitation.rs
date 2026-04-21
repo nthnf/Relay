@@ -1,13 +1,15 @@
 extern crate workspace as workspace_crate;
 
 use relay_proto::workspace::workspace_service_client::WorkspaceServiceClient;
-use relay_proto::workspace::{AcceptInvitationRequest, CreateWorkspaceRequest, IssueInvitationRequest};
+use relay_proto::workspace::{
+    AcceptInvitationRequest, CreateWorkspaceRequest, IssueInvitationRequest,
+};
 use sea_orm::{ActiveValue::Set, ColumnTrait, Database, EntityTrait, QueryFilter};
 use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
-use tonic::{metadata::MetadataValue, transport::Server, Request};
+use tonic::{Request, metadata::MetadataValue, transport::Server};
 use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
@@ -19,8 +21,7 @@ use workspace_crate::{
 const ACTOR_USER_ID_METADATA: &str = "x-user-id";
 
 #[tokio::test]
-async fn accept_invitation_replaces_stale_member_role()
--> Result<(), Box<dyn std::error::Error>> {
+async fn accept_invitation_replaces_stale_member_role() -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
     let target_user_id = Uuid::new_v4();
@@ -99,7 +100,10 @@ async fn accept_invitation_replaces_stale_member_role()
         .await?
         .into_inner();
 
-    assert_eq!(response.workspace_invitation_id, workspace_invitation_id.to_string());
+    assert_eq!(
+        response.workspace_invitation_id,
+        workspace_invitation_id.to_string()
+    );
     assert_eq!(response.user_id, target_user_id.to_string());
     assert_eq!(response.added_by_user_id, actor_user_id.to_string());
 

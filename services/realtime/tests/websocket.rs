@@ -39,7 +39,8 @@ async fn wait_for_subscription(store: &Arc<Store>, target_id: Uuid) {
     tokio::pin!(deadline);
 
     loop {
-        if let Some(subscription) = store.get_subscription(&TargetKind::WorkspaceChannel, &target_id)
+        if let Some(subscription) =
+            store.get_subscription(&TargetKind::WorkspaceChannel, &target_id)
             && !subscription.session_ids.is_empty()
         {
             return;
@@ -72,7 +73,8 @@ async fn wait_for_unsubscription(store: &Arc<Store>, target_id: Uuid) {
 }
 
 #[tokio::test]
-async fn websocket_upgrade_and_subscription_flow() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn websocket_upgrade_and_subscription_flow()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (redis, _container) = start_redis().await?;
     let store = Arc::new(Store::new());
     let redis = Arc::new(redis);

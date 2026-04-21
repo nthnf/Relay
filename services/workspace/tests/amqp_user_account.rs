@@ -1,70 +1,66 @@
-use lapin::message::Delivery;
 use migration::{Migrator, MigratorTrait};
+use relay_amqp::DeliveryContext;
 use sea_orm::EntityTrait;
-use serde_json::json;
+use std::sync::Arc;
 use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
 
-use workspace::{amqp::AmqpHandler, db, entity::user_snapshot};
+use workspace::{
+    amqp::AmqpHandler,
+    db,
+    entity::user_snapshot,
+    events::{UserEmailVerifiedPayload, UserProfileUpdatedPayload, UserRegisteredPayload},
+};
 
 #[tokio::test]
 async fn handles_user_registered_user_profile_updated_and_verified()
 -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
-    let handler = AmqpHandler::new(env.db.clone());
+    let handler = Arc::new(AmqpHandler::new(env.db.clone()));
 
-    let registered = Delivery::mock(
-        1,
-        "relay.events".into(),
-        "identity.UserRegistered".into(),
-        false,
-        json!({
-            "user_id": env.user_id.to_string(),
-            "email": "user1@example.com",
-            "email_verified": false,
-            "username": "user1",
-            "display_name": "User One",
-            "avatar_url": null,
-            "registered_at": chrono::Utc::now().to_rfc3339(),
-        })
-        .to_string()
-        .into_bytes(),
-    );
-    handler.handle_delivery(&registered).await?;
+    handler
+        .clone()
+        .handle_user_registered(
+            DeliveryContext::default(),
+            UserRegisteredPayload {
+                user_id: env.user_id.to_string(),
+                email: "user1@example.com".to_string(),
+                email_verified: false,
+                username: "user1".to_string(),
+                display_name: "User One".to_string(),
+                avatar_url: None,
+                registered_at: chrono::Utc::now().to_rfc3339(),
+            },
+        )
+        .await?;
 
-    let updated = Delivery::mock(
-        2,
-        "relay.events".into(),
-        "identity.UserProfileUpdated".into(),
-        false,
-        json!({
-            "user_id": env.user_id.to_string(),
-            "username": "user2",
-            "display_name": "User Two",
-            "avatar_url": "https://cdn.example/avatar.png",
-            "updated_at": chrono::Utc::now().to_rfc3339(),
-        })
-        .to_string()
-        .into_bytes(),
-    );
-    handler.handle_delivery(&updated).await?;
+    handler
+        .clone()
+        .handle_user_profile_updated(
+            DeliveryContext::default(),
+            UserProfileUpdatedPayload {
+                user_id: env.user_id.to_string(),
+                username: "user2".to_string(),
+                display_name: "User Two".to_string(),
+                avatar_url: Some("https://cdn.example/avatar.png".to_string()),
+                updated_at: chrono::Utc::now().to_rfc3339(),
+            },
+        )
+        .await?;
 
-    let verified = Delivery::mock(
-        3,
-        "relay.events".into(),
-        "identity.UserEmailVerified".into(),
-        false,
-        json!({
-            "user_id": env.user_id.to_string(),
-            "email": "user1@example.com",
-            "email_verified_at": chrono::Utc::now().to_rfc3339(),
-        })
-        .to_string()
-        .into_bytes(),
-    );
-    handler.handle_delivery(&verified).await?;
+    handler
+        .clone()
+        .handle_user_email_verified(
+            DeliveryContext::default(),
+            UserEmailVerifiedPayload {
+                user_id: env.user_id.to_string(),
+                email: "user1@example.com".to_string(),
+                email_verified_at: chrono::Utc::now().to_rfc3339(),
+            },
+        )
+        .await?;
 
     let row = user_snapshot::Entity::find_by_id(env.user_id)
         .one(&env.db)
@@ -74,7 +70,10 @@ async fn handles_user_registered_user_profile_updated_and_verified()
     assert!(row.email_verified);
     assert_eq!(row.username, "user2");
     assert_eq!(row.display_name, "User Two");
-    assert_eq!(row.avatar_url.as_deref(), Some("https://cdn.example/avatar.png"));
+    assert_eq!(
+        row.avatar_url.as_deref(),
+        Some("https://cdn.example/avatar.png")
+    );
 
     Ok(())
 }

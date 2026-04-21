@@ -1,38 +1,37 @@
+use friendship::events::{
+    UserEmailVerifiedPayload, UserProfileUpdatedPayload, UserRegisteredPayload,
+};
 use friendship::{amqp::AmqpHandler, db, entity::user_snapshot};
-use lapin::message::Delivery;
 use migration::{Migrator, MigratorTrait};
+use relay_amqp::DeliveryContext;
 use sea_orm::{ActiveModelTrait, EntityTrait};
-use serde_json::json;
+use std::sync::Arc;
 use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
 
 #[tokio::test]
-async fn handles_user_registered_and_seeds_user_account()
--> Result<(), Box<dyn std::error::Error>> {
+async fn handles_user_registered_and_seeds_user_account() -> Result<(), Box<dyn std::error::Error>>
+{
     let env = TestEnv::start().await?;
-    let handler = AmqpHandler::new(env.db.clone());
+    let handler = Arc::new(AmqpHandler::new(env.db.clone()));
 
-    let delivery = Delivery::mock(
-        1,
-        "relay.events".into(),
-        "identity.UserRegistered".into(),
-        false,
-        json!({
-            "user_id": env.user_id.to_string(),
-            "email": "user1@example.com",
-            "email_verified": false,
-            "username": "user1",
-            "display_name": "User One",
-            "avatar_url": null,
-            "registered_at": chrono::Utc::now().to_rfc3339(),
-        })
-        .to_string()
-        .into_bytes(),
-    );
-
-    handler.handle_delivery(&delivery).await?;
+    handler
+        .clone()
+        .handle_user_registered(
+            DeliveryContext::default(),
+            UserRegisteredPayload {
+                user_id: env.user_id.to_string(),
+                email: "user1@example.com".to_string(),
+                email_verified: false,
+                username: "user1".to_string(),
+                display_name: "User One".to_string(),
+                avatar_url: None,
+                registered_at: chrono::Utc::now().to_rfc3339(),
+            },
+        )
+        .await?;
 
     let row = user_snapshot::Entity::find_by_id(env.user_id)
         .one(&env.db)
@@ -51,25 +50,21 @@ async fn handles_user_registered_and_seeds_user_account()
 async fn handles_user_profile_updated_and_refreshes_user_snapshot()
 -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
-    let handler = AmqpHandler::new(env.db.clone());
+    let handler = Arc::new(AmqpHandler::new(env.db.clone()));
 
-    let delivery = Delivery::mock(
-        2,
-        "relay.events".into(),
-        "identity.UserProfileUpdated".into(),
-        false,
-        json!({
-            "user_id": env.user_id.to_string(),
-            "username": "user2",
-            "display_name": "User Two",
-            "avatar_url": "https://cdn.example/avatar.png",
-            "updated_at": chrono::Utc::now().to_rfc3339(),
-        })
-        .to_string()
-        .into_bytes(),
-    );
-
-    handler.handle_delivery(&delivery).await?;
+    handler
+        .clone()
+        .handle_user_profile_updated(
+            DeliveryContext::default(),
+            UserProfileUpdatedPayload {
+                user_id: env.user_id.to_string(),
+                username: "user2".to_string(),
+                display_name: "User Two".to_string(),
+                avatar_url: Some("https://cdn.example/avatar.png".to_string()),
+                updated_at: chrono::Utc::now().to_rfc3339(),
+            },
+        )
+        .await?;
 
     let row = user_snapshot::Entity::find_by_id(env.user_id)
         .one(&env.db)
@@ -78,31 +73,30 @@ async fn handles_user_profile_updated_and_refreshes_user_snapshot()
 
     assert_eq!(row.username, "user2");
     assert_eq!(row.display_name, "User Two");
-    assert_eq!(row.avatar_url.as_deref(), Some("https://cdn.example/avatar.png"));
+    assert_eq!(
+        row.avatar_url.as_deref(),
+        Some("https://cdn.example/avatar.png")
+    );
     Ok(())
 }
 
 #[tokio::test]
-async fn handles_user_email_verified_and_marks_verified()
--> Result<(), Box<dyn std::error::Error>> {
+async fn handles_user_email_verified_and_marks_verified() -> Result<(), Box<dyn std::error::Error>>
+{
     let env = TestEnv::start().await?;
-    let handler = AmqpHandler::new(env.db.clone());
+    let handler = Arc::new(AmqpHandler::new(env.db.clone()));
 
-    let delivery = Delivery::mock(
-        2,
-        "relay.events".into(),
-        "identity.UserEmailVerified".into(),
-        false,
-        json!({
-            "user_id": env.user_id.to_string(),
-            "email": "user1@example.com",
-            "email_verified_at": chrono::Utc::now().to_rfc3339(),
-        })
-        .to_string()
-        .into_bytes(),
-    );
-
-    handler.handle_delivery(&delivery).await?;
+    handler
+        .clone()
+        .handle_user_email_verified(
+            DeliveryContext::default(),
+            UserEmailVerifiedPayload {
+                user_id: env.user_id.to_string(),
+                email: "user1@example.com".to_string(),
+                email_verified_at: chrono::Utc::now().to_rfc3339(),
+            },
+        )
+        .await?;
 
     let row = user_snapshot::Entity::find_by_id(env.user_id)
         .one(&env.db)
@@ -118,10 +112,9 @@ async fn handles_user_email_verified_and_marks_verified()
 }
 
 #[tokio::test]
-async fn duplicate_user_registered_keeps_existing_row()
--> Result<(), Box<dyn std::error::Error>> {
+async fn duplicate_user_registered_keeps_existing_row() -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
-    let handler = AmqpHandler::new(env.db.clone());
+    let handler = Arc::new(AmqpHandler::new(env.db.clone()));
 
     user_snapshot::ActiveModel {
         user_id: sea_orm::Set(env.user_id),
@@ -135,25 +128,21 @@ async fn duplicate_user_registered_keeps_existing_row()
     .insert(&env.db)
     .await?;
 
-    let delivery = Delivery::mock(
-        3,
-        "relay.events".into(),
-        "identity.UserRegistered".into(),
-        false,
-        json!({
-            "user_id": env.user_id.to_string(),
-            "email": "user1@example.com",
-            "email_verified": false,
-            "username": "user1",
-            "display_name": "User One",
-            "avatar_url": null,
-            "registered_at": chrono::Utc::now().to_rfc3339(),
-        })
-        .to_string()
-        .into_bytes(),
-    );
-
-    handler.handle_delivery(&delivery).await?;
+    handler
+        .clone()
+        .handle_user_registered(
+            DeliveryContext::default(),
+            UserRegisteredPayload {
+                user_id: env.user_id.to_string(),
+                email: "user1@example.com".to_string(),
+                email_verified: false,
+                username: "user1".to_string(),
+                display_name: "User One".to_string(),
+                avatar_url: None,
+                registered_at: chrono::Utc::now().to_rfc3339(),
+            },
+        )
+        .await?;
 
     let row = user_snapshot::Entity::find_by_id(env.user_id)
         .one(&env.db)

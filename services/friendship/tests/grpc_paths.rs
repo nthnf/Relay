@@ -1,6 +1,6 @@
 use friendship::{
     db,
-    entity::{friend_request, friendship_edge, user_snapshot, user_block},
+    entity::{friend_request, friendship_edge, user_block, user_snapshot},
     grpc::FriendshipServer,
 };
 use migration::{Migrator, MigratorTrait};

@@ -7,7 +7,7 @@ use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
-use tonic::{metadata::MetadataValue, transport::Server, Request};
+use tonic::{Request, metadata::MetadataValue, transport::Server};
 use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
@@ -171,12 +171,10 @@ async fn connect_client(
 
 fn actor_request<T>(user_id: Uuid, request: T) -> Request<T> {
     let mut request = Request::new(request);
-    request
-        .metadata_mut()
-        .insert(
-            ACTOR_USER_ID_METADATA,
-            MetadataValue::try_from(user_id.to_string()).expect("metadata"),
-        );
+    request.metadata_mut().insert(
+        ACTOR_USER_ID_METADATA,
+        MetadataValue::try_from(user_id.to_string()).expect("metadata"),
+    );
     request
 }
 

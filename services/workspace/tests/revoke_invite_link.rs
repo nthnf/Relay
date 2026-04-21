@@ -2,13 +2,15 @@ extern crate workspace as workspace_crate;
 
 use chrono::Duration;
 use relay_proto::workspace::workspace_service_client::WorkspaceServiceClient;
-use relay_proto::workspace::{CreateInviteLinkRequest, CreateWorkspaceRequest, RevokeInviteLinkRequest};
+use relay_proto::workspace::{
+    CreateInviteLinkRequest, CreateWorkspaceRequest, RevokeInviteLinkRequest,
+};
 use sea_orm::{ActiveValue::Set, ColumnTrait, Database, EntityTrait, QueryFilter};
 use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
-use tonic::{metadata::MetadataValue, transport::Server, Request};
+use tonic::{Request, metadata::MetadataValue, transport::Server};
 use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
@@ -67,7 +69,10 @@ async fn revoke_invite_link_marks_link_revoked_and_is_idempotent()
         .await?
         .into_inner();
 
-    assert_eq!(response.workspace_invite_link_id, link.workspace_invite_link_id);
+    assert_eq!(
+        response.workspace_invite_link_id,
+        link.workspace_invite_link_id
+    );
     assert_eq!(response.workspace_id, created.workspace_id);
     assert_eq!(response.status, "revoked");
     assert!(response.revoked_at.is_some());
@@ -102,7 +107,10 @@ async fn revoke_invite_link_marks_link_revoked_and_is_idempotent()
         .into_inner();
 
     assert_eq!(second.status, "revoked");
-    assert_eq!(second.workspace_invite_link_id, response.workspace_invite_link_id);
+    assert_eq!(
+        second.workspace_invite_link_id,
+        response.workspace_invite_link_id
+    );
 
     env.shutdown().await;
     Ok(())

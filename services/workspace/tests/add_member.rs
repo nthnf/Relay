@@ -3,19 +3,20 @@ extern crate workspace as workspace_crate;
 use relay_proto::workspace::workspace_service_client::WorkspaceServiceClient;
 use relay_proto::workspace::{AddMemberRequest, CreateWorkspaceRequest};
 use sea_orm::{
-    ActiveValue::Set, ColumnTrait, Database, EntityTrait, IntoActiveModel, QueryFilter,
-    QueryOrder,
+    ActiveValue::Set, ColumnTrait, Database, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder,
 };
 use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
-use tonic::{metadata::MetadataValue, transport::Server, Request};
+use tonic::{Request, metadata::MetadataValue, transport::Server};
 use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
 use workspace_crate::{
-    entity::{outbox_event, user_snapshot, workspace_member, workspace_member_role, workspace_role},
+    entity::{
+        outbox_event, user_snapshot, workspace_member, workspace_member_role, workspace_role,
+    },
     grpc::WorkspaceServer,
 };
 
@@ -115,7 +116,10 @@ async fn add_member_reactivates_removed_member_and_recreates_baseline_role()
         .await?
         .expect("added event");
     assert_eq!(added_event.payload["user_id"], target_user_id.to_string());
-    assert_eq!(added_event.payload["added_by_user_id"], actor_user_id.to_string());
+    assert_eq!(
+        added_event.payload["added_by_user_id"],
+        actor_user_id.to_string()
+    );
     assert_eq!(added_event.payload["source"], "direct_add");
 
     env.shutdown().await;
@@ -194,12 +198,10 @@ async fn connect_client(
 
 fn actor_request<T>(user_id: Uuid, request: T) -> Request<T> {
     let mut request = Request::new(request);
-    request
-        .metadata_mut()
-        .insert(
-            ACTOR_USER_ID_METADATA,
-            MetadataValue::try_from(user_id.to_string()).expect("metadata"),
-        );
+    request.metadata_mut().insert(
+        ACTOR_USER_ID_METADATA,
+        MetadataValue::try_from(user_id.to_string()).expect("metadata"),
+    );
     request
 }
 
