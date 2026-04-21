@@ -8,28 +8,29 @@ service ChatService {
   rpc CreateMessage(CreateMessageRequest) returns (CreateMessageResponse);
   rpc EditMessage(EditMessageRequest) returns (EditMessageResponse);
   rpc DeleteMessage(DeleteMessageRequest) returns (DeleteMessageResponse);
-  rpc ListChannelMessages(ListChannelMessagesRequest) returns (ListMessagesResponse);
-  rpc GetOrCreateDirectConversation(GetOrCreateDirectConversationRequest) returns (GetOrCreateDirectConversationResponse);
-  rpc ListDirectConversationMessages(ListDirectConversationMessagesRequest) returns (ListMessagesResponse);
+  rpc ListConversationMessages(ListConversationMessagesRequest) returns (ListMessagesResponse);
+  rpc CreateConversation(CreateConversationRequest) returns (CreateConversationResponse);
+}
+
+enum ConversationTargetType {
+  CONVERSATION_TARGET_TYPE_UNSPECIFIED = 0;
+  CONVERSATION_TARGET_TYPE_DM = 1;
+  CONVERSATION_TARGET_TYPE_WORKSPACE_CHANNEL = 2;
 }
 
 message CreateMessageRequest {
-  optional string workspace_id = 1;
-  optional string channel_id = 2;
-  optional string direct_conversation_id = 3;
-  string body = 4;
-  optional string client_message_id = 5;
+  string conversation_id = 1;
+  string body = 2;
+  optional string client_message_id = 3;
 }
 
 message CreateMessageResponse {
   string message_id = 1;
-  optional string workspace_id = 2;
-  optional string channel_id = 3;
-  optional string direct_conversation_id = 4;
-  string author_user_id = 5;
-  int64 target_message_seq = 6;
-  string body = 7;
-  google.protobuf.Timestamp created_at = 8;
+  string conversation_id = 2;
+  string author_user_id = 3;
+  int64 conversation_message_seq = 4;
+  string body = 5;
+  google.protobuf.Timestamp created_at = 6;
 }
 
 message EditMessageRequest {
@@ -39,12 +40,9 @@ message EditMessageRequest {
 
 message EditMessageResponse {
   string message_id = 1;
-  optional string channel_id = 2;
-  optional string workspace_id = 3;
-  optional string direct_conversation_id = 4;
-  string body = 5;
-  int32 edit_version = 6;
-  google.protobuf.Timestamp edited_at = 7;
+  string conversation_id = 2;
+  string body = 3;
+  google.protobuf.Timestamp edited_at = 4;
 }
 
 message DeleteMessageRequest {
@@ -53,31 +51,22 @@ message DeleteMessageRequest {
 
 message DeleteMessageResponse {
   string message_id = 1;
-  optional string channel_id = 2;
-  optional string workspace_id = 3;
-  optional string direct_conversation_id = 4;
-  google.protobuf.Timestamp deleted_at = 5;
-  bool deleted = 6;
-  bool already_deleted = 7;
+  string conversation_id = 2;
+  google.protobuf.Timestamp deleted_at = 3;
+  bool deleted = 4;
+  bool already_deleted = 5;
 }
 
-message ListChannelMessagesRequest {
-  string workspace_id = 1;
-  string channel_id = 2;
-  optional int32 page_size = 3;
-  optional int64 before_target_message_seq = 4;
-}
-
-message ListDirectConversationMessagesRequest {
-  string direct_conversation_id = 1;
+message ListConversationMessagesRequest {
+  string conversation_id = 1;
   optional int32 page_size = 2;
-  optional int64 before_target_message_seq = 3;
+  optional int64 before_conversation_message_seq = 3;
 }
 
 message MessageSummary {
   string message_id = 1;
   string author_user_id = 2;
-  int64 target_message_seq = 3;
+  int64 conversation_message_seq = 3;
   string body = 4;
   string message_status = 5;
   google.protobuf.Timestamp created_at = 6;
@@ -87,15 +76,17 @@ message MessageSummary {
 
 message ListMessagesResponse {
   repeated MessageSummary messages = 1;
-  optional int64 next_before_target_message_seq = 2;
+  optional int64 next_before_conversation_message_seq = 2;
 }
 
-message GetOrCreateDirectConversationRequest {
-  string peer_user_id = 1;
+message CreateConversationRequest {
+  ConversationTargetType target_type = 1;
+  optional string peer_user_id = 2;
+  optional string workspace_channel_id = 3;
 }
 
-message GetOrCreateDirectConversationResponse {
-  string direct_conversation_id = 1;
+message CreateConversationResponse {
+  string conversation_id = 1;
   repeated string member_user_ids = 2;
   google.protobuf.Timestamp created_at = 3;
   bool created = 4;

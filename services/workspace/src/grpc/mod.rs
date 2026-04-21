@@ -2,6 +2,7 @@ pub mod lib;
 
 pub mod accept_invitation;
 pub mod add_member;
+pub mod authorize_channel_action;
 pub mod create_channel;
 pub mod create_invite_link;
 pub mod create_workspace;

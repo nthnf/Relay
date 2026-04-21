@@ -1,6 +1,7 @@
 use relay_proto::workspace::{
     AcceptInvitationRequest, AcceptInvitationResponse, AddMemberRequest, AddMemberResponse,
-    CreateChannelRequest, CreateChannelResponse, CreateInviteLinkRequest, CreateInviteLinkResponse,
+    AuthorizeChannelActionRequest, AuthorizeChannelActionResponse, CreateChannelRequest,
+    CreateChannelResponse, CreateInviteLinkRequest, CreateInviteLinkResponse,
     CreateWorkspaceRequest, CreateWorkspaceResponse, GetWorkspaceRequest, GetWorkspaceResponse,
     IssueInvitationRequest, IssueInvitationResponse, JoinWorkspaceByInviteLinkRequest,
     JoinWorkspaceByInviteLinkResponse, ListChannelsRequest, ListChannelsResponse,
@@ -47,6 +48,13 @@ impl WorkspaceService for Handler {
         request: Request<ListWorkspacesForUserRequest>,
     ) -> Result<Response<ListWorkspacesForUserResponse>, Status> {
         self.list_workspaces_for_user(request).await
+    }
+
+    async fn authorize_channel_action(
+        &self,
+        request: Request<AuthorizeChannelActionRequest>,
+    ) -> Result<Response<AuthorizeChannelActionResponse>, Status> {
+        self.authorize_channel_action(request).await
     }
 
     async fn create_channel(

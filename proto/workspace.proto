@@ -8,6 +8,7 @@ service WorkspaceService {
   rpc CreateWorkspace(CreateWorkspaceRequest) returns (CreateWorkspaceResponse);
   rpc GetWorkspace(GetWorkspaceRequest) returns (GetWorkspaceResponse);
   rpc ListWorkspacesForUser(ListWorkspacesForUserRequest) returns (ListWorkspacesForUserResponse);
+  rpc AuthorizeChannelAction(AuthorizeChannelActionRequest) returns (AuthorizeChannelActionResponse);
   rpc CreateChannel(CreateChannelRequest) returns (CreateChannelResponse);
   rpc ListChannels(ListChannelsRequest) returns (ListChannelsResponse);
   rpc AddMember(AddMemberRequest) returns (AddMemberResponse);
@@ -71,6 +72,22 @@ message WorkspaceSummary {
 message ListWorkspacesForUserResponse {
   repeated WorkspaceSummary workspaces = 1;
   optional string next_page_token = 2;
+}
+
+enum ChannelAction {
+  CHANNEL_ACTION_UNSPECIFIED = 0;
+  CHANNEL_ACTION_READ = 1;
+  CHANNEL_ACTION_WRITE = 2;
+}
+
+message AuthorizeChannelActionRequest {
+  string workspace_id = 1;
+  string channel_id = 2;
+  ChannelAction action = 3;
+}
+
+message AuthorizeChannelActionResponse {
+  bool allowed = 1;
 }
 
 message CreateChannelRequest {

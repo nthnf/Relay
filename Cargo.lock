@@ -1087,6 +1087,37 @@ dependencies = [
 [[package]]
 name = "chat"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chat-migration",
+ "chrono",
+ "dotenvy",
+ "lapin",
+ "prost",
+ "prost-types",
+ "relay-amqp",
+ "relay-proto",
+ "relay-types",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "testcontainers-modules",
+ "thiserror",
+ "tokio",
+ "tonic",
+ "tonic-prost",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "chat-migration"
+version = "0.1.0"
+dependencies = [
+ "sea-orm-migration",
+ "tokio",
+]
 
 [[package]]
 name = "chrono"

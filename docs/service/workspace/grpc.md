@@ -1,6 +1,6 @@
 ## gRPC Service Scope
 
-Workspace exposes synchronous workspace, membership, invitation, and channel-metadata commands plus bounded owner reads. External application servers through Envoy Gateway are the primary callers for end-user create, invite, join, member, and channel flows. These calls are authoritative access-control and membership decisions, not chat-like low-latency fanout.
+Workspace exposes synchronous workspace, membership, invitation, channel-metadata, and channel-authorization commands plus bounded owner reads. External application servers through Envoy Gateway are primary callers for end-user create, invite, join, member, and channel flows. Chat is also a synchronous internal caller for authoritative channel access checks.
 
 ## Shared Contract Rules
 
@@ -14,6 +14,7 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 - Workspace validates write-path target-user IDs with local `user_snapshot` rows before issuing invitations or directly adding a member.
 - Per-user invitations are app-scoped in v1; no email delivery is required from workspace.
 - Membership is the source of truth for access to workspace channels; `chat` does not decide who belongs to a workspace.
+- Channel read and write authorization for chat-owned messages must go through synchronous `AuthorizeChannelAction`; chat may cache metadata snapshots but not permission truth.
 - Domain writes and matching `outbox_event` inserts happen in the same transaction.
 
 ### `CreateWorkspace`
@@ -82,6 +83,28 @@ Workspace exposes synchronous workspace, membership, invitation, and channel-met
 - Return only active memberships for the authenticated actor.
 - `member_count` counts active memberships only; `channel_count` counts current `workspace_channel` rows in v1.
 - Ordering should be stable and documented by implementation, even if `bootstrap` later becomes the main UI query path.
+
+### `AuthorizeChannelAction`
+
+**Main caller:** internal `chat` service
+
+**Request fields**
+
+- `workspace_id` (`uuid`)
+- `channel_id` (`uuid`)
+- `action` (`enum`) - supported values in v1: `READ`, `WRITE`
+
+**Response fields**
+
+- `allowed` (`bool`)
+
+**Contract notes**
+
+- Actor identity still comes from trusted request metadata; callers do not pass arbitrary actor IDs in payload.
+- Return `allowed = false` for missing workspace, missing channel, archived workspace, archived channel, inactive membership, or insufficient permission.
+- Return `invalid_argument` only for malformed request fields such as invalid UUID or unsupported action.
+- `READ` and `WRITE` are message-path permissions for chat use, distinct from channel-admin actions like `CHANNEL_CREATE`.
+- Message delete remains chat-local author rule in v1; this RPC does not decide whether an actor may delete another user's message.
 
 ### `CreateChannel`
 

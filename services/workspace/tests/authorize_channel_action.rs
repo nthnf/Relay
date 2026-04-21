@@ -1,40 +1,37 @@
 extern crate workspace as workspace_crate;
 
-use relay_proto::workspace::CreateWorkspaceRequest;
+use migration::{Migrator, MigratorTrait};
 use relay_proto::workspace::workspace_service_client::WorkspaceServiceClient;
-use sea_orm::{ColumnTrait, Database, EntityTrait, QueryFilter};
+use relay_proto::workspace::{
+    AddMemberRequest, AuthorizeChannelActionRequest, ChannelAction, CreateWorkspaceRequest,
+};
+use sea_orm::{Database, EntityTrait};
 use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
 use tonic::{Request, metadata::MetadataValue, transport::Server};
 use uuid::Uuid;
-
-use migration::{Migrator, MigratorTrait};
-use workspace_crate::{
-    entity::{
-        outbox_event, user_snapshot, workspace, workspace_channel, workspace_member,
-        workspace_member_role, workspace_role,
-    },
-    grpc::WorkspaceServer,
-    grpc::lib::permission,
-};
+use workspace_crate::entity::user_snapshot;
+use workspace_crate::grpc::WorkspaceServer;
 
 const ACTOR_USER_ID_METADATA: &str = "x-user-id";
 
 #[tokio::test]
-async fn create_workspace_persists_workspace_member_channel_roles_and_events()
+async fn authorize_channel_action_allows_read_and_write_for_member()
 -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
-    let actor_user_id = Uuid::new_v4();
+    let owner_user_id = Uuid::new_v4();
+    let member_user_id = Uuid::new_v4();
 
-    insert_user_snapshot(&env.db, actor_user_id).await?;
+    insert_user_snapshot(&env.db, owner_user_id).await?;
+    insert_user_snapshot(&env.db, member_user_id).await?;
 
-    let response = env
+    let created = env
         .client
         .clone()
         .create_workspace(actor_request(
-            actor_user_id,
+            owner_user_id,
             CreateWorkspaceRequest {
                 name: "Acme".to_string(),
                 first_channel_name: "general".to_string(),
@@ -43,83 +40,90 @@ async fn create_workspace_persists_workspace_member_channel_roles_and_events()
         .await?
         .into_inner();
 
-    assert_eq!(response.name, "Acme");
-    assert_eq!(response.owner_user_id, actor_user_id.to_string());
-    assert_eq!(response.initial_member_user_id, actor_user_id.to_string());
-    assert_eq!(response.first_channel_id.len(), 36);
-
-    let workspace_id = Uuid::parse_str(&response.workspace_id)?;
-    let channel_id = Uuid::parse_str(&response.first_channel_id)?;
-
-    let workspace_row: workspace::Model = workspace::Entity::find_by_id(workspace_id)
-        .one(&env.db)
-        .await?
-        .expect("workspace row");
-    assert_eq!(workspace_row.owner_user_id, actor_user_id);
-    assert_eq!(workspace_row.name, "Acme");
-
-    let channel_row: workspace_channel::Model = workspace_channel::Entity::find_by_id(channel_id)
-        .one(&env.db)
-        .await?
-        .expect("workspace channel row");
-    assert_eq!(channel_row.workspace_id, workspace_id);
-    assert_eq!(channel_row.name, "general");
-    assert_eq!(channel_row.channel_kind, "text");
-    assert_eq!(channel_row.position, 1);
-    assert_eq!(channel_row.created_by_user_id, actor_user_id);
-
-    let member_row: workspace_member::Model = workspace_member::Entity::find()
-        .filter(workspace_member::Column::WorkspaceId.eq(workspace_id))
-        .filter(workspace_member::Column::UserId.eq(actor_user_id))
-        .one(&env.db)
-        .await?
-        .expect("workspace member row");
-    assert_eq!(member_row.membership_status, "active");
-    assert_eq!(member_row.added_by_user_id, Some(actor_user_id));
-
-    let role_rows: Vec<workspace_role::Model> = workspace_role::Entity::find()
-        .filter(workspace_role::Column::WorkspaceId.eq(workspace_id))
-        .all(&env.db)
+    env.client
+        .clone()
+        .add_member(actor_request(
+            owner_user_id,
+            AddMemberRequest {
+                workspace_id: created.workspace_id.clone(),
+                target_user_id: member_user_id.to_string(),
+            },
+        ))
         .await?;
-    assert_eq!(role_rows.len(), 3);
-    assert!(role_rows.iter().any(|row| {
-        row.name == "Owner" && row.permissions == permission::to_db(permission::owner()).unwrap()
-    }));
-    assert!(role_rows.iter().any(|row| {
-        row.name == "Admin" && row.permissions == permission::to_db(permission::admin()).unwrap()
-    }));
-    assert!(role_rows.iter().any(|row| {
-        row.name == "Member" && row.permissions == permission::to_db(permission::member()).unwrap()
-    }));
 
-    let member_role_rows: Vec<workspace_member_role::Model> = workspace_member_role::Entity::find()
-        .filter(workspace_member_role::Column::WorkspaceId.eq(workspace_id))
-        .filter(workspace_member_role::Column::UserId.eq(actor_user_id))
-        .all(&env.db)
-        .await?;
-    assert_eq!(member_role_rows.len(), 1);
-    assert_eq!(
-        member_role_rows[0].role_id,
-        role_rows.iter().find(|row| row.name == "Owner").unwrap().id
-    );
+    let read = env
+        .client
+        .clone()
+        .authorize_channel_action(actor_request(
+            member_user_id,
+            AuthorizeChannelActionRequest {
+                workspace_id: created.workspace_id.clone(),
+                channel_id: created.first_channel_id.clone(),
+                action: ChannelAction::Read as i32,
+            },
+        ))
+        .await?
+        .into_inner();
 
-    let outbox_rows: Vec<outbox_event::Model> = outbox_event::Entity::find().all(&env.db).await?;
-    assert_eq!(outbox_rows.len(), 3);
-    assert!(
-        outbox_rows
-            .iter()
-            .any(|row| row.event_type == "WorkspaceCreated")
-    );
-    assert!(
-        outbox_rows
-            .iter()
-            .any(|row| row.event_type == "WorkspaceMemberAdded")
-    );
-    assert!(
-        outbox_rows
-            .iter()
-            .any(|row| row.event_type == "WorkspaceChannelCreated")
-    );
+    let write = env
+        .client
+        .clone()
+        .authorize_channel_action(actor_request(
+            member_user_id,
+            AuthorizeChannelActionRequest {
+                workspace_id: created.workspace_id.clone(),
+                channel_id: created.first_channel_id.clone(),
+                action: ChannelAction::Write as i32,
+            },
+        ))
+        .await?
+        .into_inner();
+
+    assert!(read.allowed);
+    assert!(write.allowed);
+
+    env.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn authorize_channel_action_returns_false_for_outsider()
+-> Result<(), Box<dyn std::error::Error>> {
+    let env = TestEnv::start().await?;
+    let owner_user_id = Uuid::new_v4();
+    let outsider_user_id = Uuid::new_v4();
+
+    insert_user_snapshot(&env.db, owner_user_id).await?;
+    insert_user_snapshot(&env.db, outsider_user_id).await?;
+
+    let created = env
+        .client
+        .clone()
+        .create_workspace(actor_request(
+            owner_user_id,
+            CreateWorkspaceRequest {
+                name: "Acme".to_string(),
+                first_channel_name: "general".to_string(),
+            },
+        ))
+        .await?
+        .into_inner();
+
+    let read = env
+        .client
+        .clone()
+        .authorize_channel_action(actor_request(
+            outsider_user_id,
+            AuthorizeChannelActionRequest {
+                workspace_id: created.workspace_id,
+                channel_id: created.first_channel_id,
+                action: ChannelAction::Read as i32,
+            },
+        ))
+        .await?
+        .into_inner();
+
+    assert!(!read.allowed);
 
     env.shutdown().await;
     Ok(())

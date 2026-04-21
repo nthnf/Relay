@@ -4,23 +4,27 @@
 flowchart LR
     Browser[Browser Client] --> App[External SvelteKit]
     App --> Gateway[Envoy Gateway]
-    Gateway -->|gRPC CreateMessage / ListChannelMessages| Chat[chat]
-    Gateway -->|gRPC GetOrCreateDirectConversation / CreateMessage / ListDirectConversationMessages| Chat
+    Gateway -->|gRPC CreateMessage / ListConversationMessages| Chat[chat]
+    Gateway -->|gRPC CreateConversation / CreateMessage / ListConversationMessages| Chat
     Gateway -->|gRPC EditMessage / DeleteMessage| Chat
-    Chat -->|validate workspace membership and channel access| Workspace[workspace]
+    Chat -->|sync AuthorizeChannelAction| Workspace[workspace]
 
     subgraph Chat DB Transaction
-        DC[(direct_conversation)]
-        DCM[(direct_conversation_member)]
+        C[(conversation)]
+        CMEM[(conversation_member)]
+        US[(user_snapshot)]
+        WS[(workspace_snapshot)]
+        WCS[(workspace_channel_snapshot)]
         CM[(chat_message)]
-        CME[(chat_message_edit)]
         O[(outbox_event)]
     end
 
-    Chat -->|create or load direct conversation| DC
-    Chat -->|persist direct conversation participants| DCM
-    Chat -->|write channel or direct message row| CM
-    Chat -->|append edit history| CME
+    Chat -->|create or load conversation row| C
+    Chat -->|persist DM participants| CMEM
+    Chat -->|project user legitimacy| US
+    Chat -->|project workspace legitimacy| WS
+    Chat -->|project channel legitimacy| WCS
+    Chat -->|write or edit current message row| CM
     Chat -->|same transaction inserts event row| O
 
     Chat -->|post-commit DeliverMessage| Realtime[realtime]
@@ -36,8 +40,8 @@ flowchart LR
 Notes:
 
 - Envoy Gateway owns backend ingress policy; chat owns durable message, edit, and delete invariants plus service-boundary authorization.
-- Workspace-channel writes and reads depend on workspace-owned membership and channel validation before chat accepts them.
-- Chat also owns direct-message conversation metadata and participant membership used to authorize DM reads and writes.
+- Workspace-channel writes and reads depend on synchronous `workspace.AuthorizeChannelAction` checks before chat accepts them.
+- Chat owns DM participant membership used to authorize DM reads and writes.
 - Chat writes domain rows and `outbox_event` rows in the same local Postgres transaction.
 - Channel message fanout and direct-message fanout both call `realtime.DeliverMessage` only after durable write success and remain best-effort for latency.
 - RabbitMQ publication is the durable path for downstream convergence, replay, and recovery when synchronous fanout is unavailable.

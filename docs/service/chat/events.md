@@ -1,10 +1,10 @@
 ## Publication Model
 
-Chat publishes integration events by inserting service-owned rows into `outbox_event` inside the same transaction as the source message write. The shared outbox worker later publishes those rows to RabbitMQ. The same event family covers both workspace-channel messages and direct-message conversation messages in v1.
+Chat publishes integration events by inserting service-owned rows into `outbox_event` inside same transaction as source message write. Shared outbox worker later publishes those rows to RabbitMQ. Same event family covers both workspace-channel and DM conversation messages in v1.
 
 ## Published Events
 
-All published chat events must carry `event_id` as required event metadata. The same `event_id` must be stored in the source `outbox_event` row and surfaced by the outbox worker in the broker delivery envelope or headers so downstream consumers such as `realtime` can deduplicate retries and race conditions.
+All published chat events must carry `delivery_id` as required delivery metadata. Same `delivery_id` must be stored in source `outbox_event` row and surfaced by outbox worker in broker delivery envelope or headers so downstream consumers such as `realtime` can deduplicate retries and race conditions.
 
 ### `MessageCreated`
 
@@ -14,14 +14,14 @@ All published chat events must carry `event_id` as required event metadata. The 
 
 **Minimum payload**
 
-- `event_id`
+- `delivery_id`
 - `message_id`
-- `target_kind` with contract values `workspace_channel` or `direct_message`
-- `workspace_id` when `target_kind = workspace_channel`
-- `channel_id` when `target_kind = workspace_channel`
-- `direct_conversation_id` when `target_kind = direct_message`
+- `conversation_id`
+- `target_type` with contract values `workspace_channel` or `dm`
+- `workspace_id` when `target_type = workspace_channel`
+- `workspace_channel_id` when `target_type = workspace_channel`
 - `author_user_id`
-- `target_message_seq`
+- `conversation_message_seq`
 - `body`
 - `created_at`
 
@@ -39,14 +39,13 @@ All published chat events must carry `event_id` as required event metadata. The 
 
 **Minimum payload**
 
-- `event_id`
+- `delivery_id`
 - `message_id`
-- `target_kind`
-- `workspace_id` when `target_kind = workspace_channel`
-- `channel_id` when `target_kind = workspace_channel`
-- `direct_conversation_id` when `target_kind = direct_message`
+- `conversation_id`
+- `target_type`
+- `workspace_id` when `target_type = workspace_channel`
+- `workspace_channel_id` when `target_type = workspace_channel`
 - `editor_user_id`
-- `edit_version`
 - `body`
 - `edited_at`
 
@@ -63,12 +62,12 @@ All published chat events must carry `event_id` as required event metadata. The 
 
 **Minimum payload**
 
-- `event_id`
+- `delivery_id`
 - `message_id`
-- `target_kind`
-- `workspace_id` when `target_kind = workspace_channel`
-- `channel_id` when `target_kind = workspace_channel`
-- `direct_conversation_id` when `target_kind = direct_message`
+- `conversation_id`
+- `target_type`
+- `workspace_id` when `target_type = workspace_channel`
+- `workspace_channel_id` when `target_type = workspace_channel`
 - `deleted_by_user_id`
 - `deleted_at`
 
@@ -79,11 +78,11 @@ All published chat events must carry `event_id` as required event metadata. The 
 
 ## Event Rules
 
-- Chat events use chat-owned `message_id` values plus target context identifying either a workspace channel or a direct conversation.
-- Every published event must carry the stable outbox-derived `event_id` used for RabbitMQ deduplication and direct-versus-durable delivery reconciliation.
+- Chat events use chat-owned `message_id` plus stable `conversation_id` target identity.
+- Every published event must carry stable outbox-derived `delivery_id` used for RabbitMQ deduplication and direct-versus-durable delivery reconciliation.
 - `MessageCreated` is the durable signal that a message exists, regardless of whether the synchronous realtime notify succeeded.
 - A duplicate retry resolved through `client_message_id` idempotency does not emit another `MessageCreated`; the original durable create remains the only create event.
-- `MessageEdited` represents the current message body after the edit commits; historical diffs stay in `chat_message_edit` and need not be fully embedded in every event.
+- `MessageEdited` represents current message body after edit commits; chat does not expose append-only edit-history table in v1 contract.
 - `MessageEdited` and `MessageDeleted` are emitted only when the actor is both the message author and currently authorized on the parent target.
 - `MessageDeleted` is emitted for soft delete and should be treated downstream as a tombstone signal for current message visibility.
 - A repeated delete against an already deleted message does not emit another `MessageDeleted`; downstream consumers keep the existing tombstone state.
