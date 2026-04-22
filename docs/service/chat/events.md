@@ -17,9 +17,9 @@ All published chat events must carry `delivery_id` as required delivery metadata
 - `delivery_id`
 - `message_id`
 - `conversation_id`
-- `target_type` with contract values `workspace_channel` or `dm`
-- `workspace_id` when `target_type = workspace_channel`
-- `workspace_channel_id` when `target_type = workspace_channel`
+- `target_type` with contract values `channel` or `dm`
+- `workspace_id` when `target_type = channel`
+- `workspace_channel_id` when `target_type = channel`
 - `author_user_id`
 - `conversation_message_seq`
 - `body`
@@ -43,8 +43,8 @@ All published chat events must carry `delivery_id` as required delivery metadata
 - `message_id`
 - `conversation_id`
 - `target_type`
-- `workspace_id` when `target_type = workspace_channel`
-- `workspace_channel_id` when `target_type = workspace_channel`
+- `workspace_id` when `target_type = channel`
+- `workspace_channel_id` when `target_type = channel`
 - `editor_user_id`
 - `body`
 - `edited_at`
@@ -66,8 +66,8 @@ All published chat events must carry `delivery_id` as required delivery metadata
 - `message_id`
 - `conversation_id`
 - `target_type`
-- `workspace_id` when `target_type = workspace_channel`
-- `workspace_channel_id` when `target_type = workspace_channel`
+- `workspace_id` when `target_type = channel`
+- `workspace_channel_id` when `target_type = channel`
 - `deleted_by_user_id`
 - `deleted_at`
 

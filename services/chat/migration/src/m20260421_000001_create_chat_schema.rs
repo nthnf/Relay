@@ -83,8 +83,8 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(uuid(Conversation::Id).not_null().primary_key())
                     .col(text(Conversation::TargetType).not_null())
+                    .col(uuid_null(Conversation::DmPairId))
                     .col(uuid_null(Conversation::WorkspaceChannelId))
-                    .col(uuid(Conversation::CreatedByUserId).not_null())
                     .col(
                         timestamp_with_time_zone(Conversation::CreatedAt)
                             .not_null()
@@ -100,7 +100,7 @@ impl MigrationTrait for Migration {
                 r#"
                 ALTER TABLE "conversation"
                 ADD CONSTRAINT "ck-conversation-target-type"
-                CHECK ("target_type" IN ('dm', 'workspace_channel'))
+                CHECK ("target_type" IN ('dm', 'channel'))
                 "#,
             )
             .await?;
@@ -115,10 +115,12 @@ impl MigrationTrait for Migration {
                     (
                         "target_type" = 'dm'
                         AND "workspace_channel_id" IS NULL
+                        AND "dm_pair_id" IS NOT NULL
                     )
                     OR (
-                        "target_type" = 'workspace_channel'
+                        "target_type" = 'channel'
                         AND "workspace_channel_id" IS NOT NULL
+                        AND "dm_pair_id" IS NULL
                     )
                 )
                 "#,
@@ -138,29 +140,53 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
+            .create_index(
+                Index::create()
+                    .if_not_exists()
+                    .name("uq-conversation-dm-pair-id")
+                    .table(Conversation::Table)
+                    .col(Conversation::DmPairId)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
             .create_table(
                 Table::create()
-                    .table(ConversationMember::Table)
+                    .table(DmPair::Table)
                     .if_not_exists()
-                    .col(uuid(ConversationMember::Id).not_null().primary_key())
-                    .col(uuid(ConversationMember::ConversationId).not_null())
-                    .col(uuid(ConversationMember::UserId).not_null())
+                    .col(uuid(DmPair::Id).not_null().primary_key())
+                    .col(uuid(DmPair::LowUserId).not_null())
+                    .col(uuid(DmPair::HighUserId).not_null())
                     .col(
-                        timestamp_with_time_zone(ConversationMember::JoinedAt)
+                        timestamp_with_time_zone(DmPair::CreatedAt)
                             .not_null()
                             .default(Expr::current_timestamp()),
                     )
-                    .foreign_key(
-                        ForeignKey::create()
-                            .name("fk-conversation-member-conversation-id")
-                            .from(
-                                ConversationMember::Table,
-                                ConversationMember::ConversationId,
-                            )
-                            .to(Conversation::Table, Conversation::Id)
-                            .on_delete(ForeignKeyAction::Cascade),
-                    )
                     .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_foreign_key(
+                ForeignKey::create()
+                    .name("fk-conversation-dm-pair-id")
+                    .from(Conversation::Table, Conversation::DmPairId)
+                    .to(DmPair::Table, DmPair::Id)
+                    .on_delete(ForeignKeyAction::Cascade)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .get_connection()
+            .execute_unprepared(
+                r#"
+                ALTER TABLE "dm_pair"
+                ADD CONSTRAINT "ck-dm-pair-user-order"
+                CHECK ("low_user_id" < "high_user_id")
+                "#,
             )
             .await?;
 
@@ -168,10 +194,10 @@ impl MigrationTrait for Migration {
             .create_index(
                 Index::create()
                     .if_not_exists()
-                    .name("uq-conversation-member-conversation-user")
-                    .table(ConversationMember::Table)
-                    .col(ConversationMember::ConversationId)
-                    .col(ConversationMember::UserId)
+                    .name("uq-dm-pair-users")
+                    .table(DmPair::Table)
+                    .col(DmPair::LowUserId)
+                    .col(DmPair::HighUserId)
                     .unique()
                     .to_owned(),
             )
@@ -320,13 +346,10 @@ impl MigrationTrait for Migration {
         manager
             .drop_index(
                 Index::drop()
-                    .name("uq-conversation-member-conversation-user")
-                    .table(ConversationMember::Table)
+                    .name("uq-dm-pair-users")
+                    .table(DmPair::Table)
                     .to_owned(),
             )
-            .await?;
-        manager
-            .drop_table(Table::drop().table(ConversationMember::Table).to_owned())
             .await?;
         manager
             .drop_index(
@@ -337,7 +360,18 @@ impl MigrationTrait for Migration {
             )
             .await?;
         manager
+            .drop_index(
+                Index::drop()
+                    .name("uq-conversation-dm-pair-id")
+                    .table(Conversation::Table)
+                    .to_owned(),
+            )
+            .await?;
+        manager
             .drop_table(Table::drop().table(Conversation::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(DmPair::Table).to_owned())
             .await?;
         manager
             .drop_table(
@@ -388,18 +422,18 @@ enum Conversation {
     Table,
     Id,
     TargetType,
+    DmPairId,
     WorkspaceChannelId,
-    CreatedByUserId,
     CreatedAt,
 }
 
 #[derive(DeriveIden)]
-enum ConversationMember {
+enum DmPair {
     Table,
     Id,
-    ConversationId,
-    UserId,
-    JoinedAt,
+    LowUserId,
+    HighUserId,
+    CreatedAt,
 }
 
 #[derive(DeriveIden)]

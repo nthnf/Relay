@@ -10,8 +10,9 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub target_type: String,
     #[sea_orm(unique)]
+    pub dm_pair_id: Option<Uuid>,
+    #[sea_orm(unique)]
     pub workspace_channel_id: Option<Uuid>,
-    pub created_by_user_id: Uuid,
     pub created_at: DateTimeWithTimeZone,
 }
 
@@ -19,8 +20,14 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::chat_message::Entity")]
     ChatMessage,
-    #[sea_orm(has_many = "super::conversation_member::Entity")]
-    ConversationMember,
+    #[sea_orm(
+        belongs_to = "super::dm_pair::Entity",
+        from = "Column::DmPairId",
+        to = "super::dm_pair::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    DmPair,
 }
 
 impl Related<super::chat_message::Entity> for Entity {
@@ -29,9 +36,9 @@ impl Related<super::chat_message::Entity> for Entity {
     }
 }
 
-impl Related<super::conversation_member::Entity> for Entity {
+impl Related<super::dm_pair::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::ConversationMember.def()
+        Relation::DmPair.def()
     }
 }
 

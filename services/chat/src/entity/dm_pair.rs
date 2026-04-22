@@ -3,26 +3,20 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
-#[sea_orm(table_name = "conversation_member")]
+#[sea_orm(table_name = "dm_pair")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
-    #[sea_orm(unique_key = "user")]
-    pub conversation_id: Uuid,
-    #[sea_orm(unique_key = "user")]
-    pub user_id: Uuid,
-    pub joined_at: DateTimeWithTimeZone,
+    #[sea_orm(unique_key = "users")]
+    pub low_user_id: Uuid,
+    #[sea_orm(unique_key = "users")]
+    pub high_user_id: Uuid,
+    pub created_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::conversation::Entity",
-        from = "Column::ConversationId",
-        to = "super::conversation::Column::Id",
-        on_update = "NoAction",
-        on_delete = "Cascade"
-    )]
+    #[sea_orm(has_one = "super::conversation::Entity")]
     Conversation,
 }
 

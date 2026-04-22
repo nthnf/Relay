@@ -5,9 +5,9 @@ Chat owns durable message writes and message-history state for both workspace ch
 ## Owned Responsibilities
 
 - Create conversation-scoped messages and assign durable per-conversation ordering.
-- Create or load 1:1 direct-message conversations with stable `conversation_id` values.
-- Create or load workspace-channel conversation rows with stable `conversation_id` values.
-- Enforce one durable 1:1 conversation per unordered user pair in application logic.
+- Create or load 1:1 direct-message conversations from an explicit DM-create or DM-open action, with stable `conversation_id` values and one normalized DM pair row referenced by `conversation.dm_pair_id`.
+- Create workspace-channel conversation rows once after successful channel creation, with stable chat-owned `conversation_id` values distinct from `workspace_channel_id`.
+- Enforce one durable 1:1 conversation per unordered user pair through canonical `(low_user_id, high_user_id)` ordering.
 - Enforce retry-safe message creation when `client_message_id` is supplied.
 - Persist message edits and soft deletes.
 - Serve bounded message-history reads for conversations.
@@ -18,6 +18,9 @@ Chat owns durable message writes and message-history state for both workspace ch
 
 - Frontend opens websocket to `realtime` for live delivery only.
 - Frontend fetches history and sidebar data from `chat`, `workspace`, or `bootstrap`.
+- Creating a workspace channel typically triggers two backend calls in sequence: create the channel in `workspace`, then create the matching conversation in `chat`.
+- Creating or reopening a DM comes from an explicit user action such as a New DM or message-user button that calls `chat.CreateConversation`.
+- Workspace channel screens may begin with workspace-owned channel context, but message history and commands use the resolved chat-owned `conversation_id`.
 - `chat` and `workspace` remain write and history authorities; `realtime` never serves durable source data.
 
 ## Non-Goals
@@ -45,7 +48,10 @@ Chat owns durable message writes and message-history state for both workspace ch
 - Message-domain rows and matching `outbox_event` rows are written in the same local transaction.
 - `chat_message.client_message_id` is nullable, but when present it must be unique per conversation and author for retry-safe create semantics.
 - `chat_message` points to exactly one `conversation_id`.
-- `conversation.target_type` distinguishes workspace-channel targets from DM targets.
+- `conversation.target_type` distinguishes channel targets from DM targets.
+- `conversation.dm_pair_id` stores DM-only pair reference when `target_type = dm`.
+- `conversation_id` remains chat-owned and distinct from `workspace_channel_id` for workspace-channel conversations.
+- `dm_pair` stores one normalized participant pair row for each 1:1 DM conversation.
 - `user_snapshot`, `workspace_snapshot`, and `workspace_channel_snapshot` are minimal legitimacy snapshots only.
 - `workspace_channel_id`, `conversation_id`, and `user_id` values are service-owned or cross-service references, not foreign keys into another service database.
 - Redis is not required by default for v1 chat behavior.
@@ -71,11 +77,11 @@ See `events.md` for payload and publication rules.
 ## Realtime Coordination
 
 - Chat remains the durable source of truth for message acceptance and persisted history.
-- Workspace continues to own workspace membership, channel metadata, and channel authorization truth, while chat owns direct-message participant rows and durable conversation identity.
+- Workspace continues to own workspace membership, channel metadata, and channel authorization truth, while chat owns direct-message participant-pair rows and durable conversation identity.
 - Chat may reject workspace-channel conversation creation when local `workspace_snapshot` or `workspace_channel_snapshot` rows do not exist yet.
 - After a message-create write commits successfully, chat may synchronously call `realtime.DeliverMessage` so connected clients can receive low-latency fanout over existing websocket subscriptions.
 - Edits and deletes converge through durable chat events in v1 rather than a direct synchronous `chat -> realtime` hot path.
 - Before accepting a workspace-channel write or history read, chat must call `workspace.AuthorizeChannelAction` synchronously.
-- Before accepting a DM write or history read, chat must validate local `conversation_member` rows.
+- Before accepting a DM write or history read, chat must validate the local `conversation.dm_pair_id` row.
 - Synchronous fanout is best-effort for latency only; a failed notify must not roll back or invalidate an already committed chat write.
 - Durable recovery and downstream convergence come from `outbox_event` publication to RabbitMQ, not from the synchronous notify path.

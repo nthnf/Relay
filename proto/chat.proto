@@ -87,7 +87,5 @@ message CreateConversationRequest {
 
 message CreateConversationResponse {
   string conversation_id = 1;
-  repeated string member_user_ids = 2;
   google.protobuf.Timestamp created_at = 3;
-  bool created = 4;
 }

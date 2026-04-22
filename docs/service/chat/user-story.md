@@ -8,9 +8,13 @@ As a signed-in user, I open one websocket to `realtime` for live delivery, then 
 
 As an active workspace member, I can send a message to a channel so chat durably stores the message as the source of truth, assigns conversation-scoped ordering, and then attempts low-latency realtime fanout without making delivery a prerequisite for write success.
 
+## Create a workspace channel and initialize its chat conversation
+
+As an active workspace member, when I create a new channel the application creates the workspace channel first and then immediately calls chat once to create its durable `conversation_id`, so later message send and history flows can use that stable chat-owned conversation address.
+
 ## Start or reopen a direct message with another user
 
-As an authenticated user, I can open a direct message with another user so chat returns a stable 1:1 `conversation_id` and persists messages for that conversation without depending on workspace channel state.
+As an authenticated user, I can press a dedicated DM-create or DM-open button for another user so chat creates or returns a stable 1:1 `conversation_id` and persists messages for that conversation without depending on workspace channel state.
 
 ## Edit or delete my own message
 

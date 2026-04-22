@@ -1,15 +1,16 @@
 ## Persistence Scope
 
-Chat owns durable conversation and message-write state in v1: conversation identity, DM participant membership, minimal legitimacy snapshots, current message state, and soft-delete state. Other services must use chat gRPC or chat events instead of reading these tables directly.
+Chat owns durable conversation and message-write state in v1: conversation identity, normalized 1:1 DM participant pairs, minimal legitimacy snapshots, current message state, and soft-delete state. Other services must use chat gRPC or chat events instead of reading these tables directly.
 
 ## Model Direction
 
 - Chat uses one durable `conversation_id` for both workspace-channel and DM message targets.
-- `conversation.target_type` distinguishes `workspace_channel` from `dm`.
+- `conversation.target_type` distinguishes `channel` from `dm`.
+- `conversation_id` remains chat-owned and distinct from `workspace_channel_id` even for channel conversations.
 - `chat_message` points only to `conversation_id`.
 - Workspace-channel authorization remains synchronous to `workspace`; chat does not own workspace membership or permission truth.
 - User, workspace, and channel snapshots exist only so chat can reject unknown targets before or alongside sync auth.
-- DM authorization remains local to chat through `conversation_member` rows.
+- DM authorization remains local to chat through one normalized DM pair row linked from `conversation`.
 
 ## Core Tables
 
@@ -20,37 +21,41 @@ One row per durable message target.
 | Column                 | Type          | Notes                                                                                 |
 | ---------------------- | ------------- | ------------------------------------------------------------------------------------- |
 | `conversation_id`      | `uuid`        | Primary key. Stable chat-owned target identifier for both DMs and workspace channels. |
-| `target_type`          | `text`        | Contract values: `dm`, `workspace_channel`.                                           |
+| `target_type`          | `text`        | Contract values: `dm`, `channel`.                                                      |
+| `dm_pair_id`           | `uuid null`   | DM pair reference for DM conversations only.                                           |
 | `workspace_channel_id` | `uuid null`   | Workspace-owned channel reference for channel conversations only.                     |
-| `created_by_user_id`   | `uuid`        | Identity-owned actor who caused conversation row to exist.                            |
 | `created_at`           | `timestamptz` | Conversation creation time.                                                           |
 
 Semantic rules:
 
 - `conversation` is single durable target table for both DMs and workspace channels.
+- For `target_type = dm`, `dm_pair_id` must be set.
 - For `target_type = dm`, `workspace_channel_id` must be null.
-- For `target_type = workspace_channel`, `workspace_channel_id` is required.
-- Workspace-channel conversations are created on demand only after local snapshot existence checks and synchronous `workspace.AuthorizeChannelAction` checks pass.
-- DM conversations are created on demand.
-- If v1 still requires one durable DM conversation per unordered pair, application logic must enforce that invariant during `CreateConversation` handling because `dm_pair_key` is no longer stored on `conversation`.
+- For `target_type = channel`, `workspace_channel_id` is required.
+- `conversation_id` is the stable chat-owned message-stream address for both target types.
+- Workspace-channel conversations are created once after the channel already exists, typically as a follow-up `chat.CreateConversation` call after successful channel creation.
+- DM conversations are created from an explicit user action such as a dedicated DM-create or DM-open button.
+- One workspace channel may map to only one durable chat conversation, but the IDs remain separate because `workspace` owns channels and `chat` owns conversation streams.
 
-### `conversation_member`
+### `dm_pair`
 
-Participant membership for DM conversations.
+One normalized participant-pair row for each 1:1 DM conversation.
 
-| Column                   | Type          | Notes                                          |
-| ------------------------ | ------------- | ---------------------------------------------- |
-| `conversation_member_id` | `uuid`        | Primary key. Stable membership row identifier. |
-| `conversation_id`        | `uuid`        | Refers to `conversation.conversation_id`.      |
-| `user_id`                | `uuid`        | Identity-owned participant reference.          |
-| `joined_at`              | `timestamptz` | Membership creation time.                      |
+| Column            | Type          | Notes                                                                 |
+| ----------------- | ------------- | --------------------------------------------------------------------- |
+| `dm_pair_id`      | `uuid`        | Primary key. Stable 1:1 participant-pair identifier.                  |
+| `low_user_id`     | `uuid`        | Lower UUID of the two DM participants after canonical ordering.       |
+| `high_user_id`    | `uuid`        | Higher UUID of the two DM participants after canonical ordering.      |
+| `created_at`      | `timestamptz` | DM pair row creation time.                                            |
 
 Semantic rules:
 
-- `conversation_member` exists only for `target_type = dm` in v1.
-- Each 1:1 DM conversation has exactly two active membership rows in v1.
-- Membership uniqueness is `(conversation_id, user_id)`.
-- Membership rows are durable authorization state for DM reads and writes.
+- `dm_pair` exists only for `target_type = dm` in v1.
+- Each 1:1 DM conversation has exactly one `dm_pair` row in v1, reached through `conversation.dm_pair_id`.
+- Application logic must derive `low_user_id` and `high_user_id` by comparing the raw UUID values, not any encoded public form.
+- `low_user_id < high_user_id` must always hold, preventing self-DM rows and reversed duplicates.
+- Pair uniqueness is `(low_user_id, high_user_id)`.
+- The row is durable authorization and routing state for DM reads and writes.
 
 ### `user_snapshot`
 
@@ -132,16 +137,20 @@ Semantic rules:
 ## Relations
 
 - `chat_message.conversation_id -> conversation.conversation_id`
-- `conversation_member.conversation_id -> conversation.conversation_id`
+- `conversation.dm_pair_id -> dm_pair.dm_pair_id`
 - `workspace_channel_snapshot.workspace_id -> workspace_snapshot.workspace_id` by value only, not cross-service foreign key
 
 ## Index and Constraint Notes
 
 - Check constraint should enforce `conversation.target_type` invariant:
   - `dm` => `workspace_channel_id` null
-  - `workspace_channel` => `workspace_channel_id` set
+  - `channel` => `workspace_channel_id` set
+- Check constraint should enforce `conversation.dm_pair_id` invariant:
+  - `dm` => `dm_pair_id` not null
+  - `channel` => `dm_pair_id` null
 - Unique constraint on `conversation.workspace_channel_id` where not null preserves one conversation per workspace channel.
-- Unique constraint on `(conversation_id, user_id)` preserves DM membership uniqueness.
+- Check constraint on `dm_pair` should enforce `low_user_id < high_user_id`.
+- Unique constraint on `(low_user_id, high_user_id)` preserves one durable DM conversation per unordered pair.
 - Unique constraint on `(conversation_id, conversation_message_seq)` preserves stable per-conversation ordering.
 - Unique constraint on `(author_user_id, conversation_id, client_message_id)` where `client_message_id IS NOT NULL` enforces retry-safe create semantics.
 
@@ -151,7 +160,7 @@ Semantic rules:
 - `workspace` remains authority for workspace-channel access and permission decisions through synchronous gRPC checks.
 - `identity` owns all user IDs used for authorship, delete actors, and DM participants.
 - `identity` remains authority for whether user IDs are legitimate; chat only keeps minimal user legitimacy snapshot.
-- Chat authorizes DMs locally from `conversation_member` rows it owns.
+- Chat authorizes DMs locally from `dm_pair` rows it owns.
 - `realtime` receives best-effort synchronous `DeliverMessage` calls after durable writes and also consumes durable chat events for repair or catch-up.
 - `bootstrap` and other downstream consumers materialize projections from durable chat events rather than querying chat tables directly.
 
@@ -159,5 +168,5 @@ Semantic rules:
 
 - `chat_message` rows remain after soft delete in v1.
 - `conversation` rows remain durable target identity for both DMs and workspace channels.
-- `conversation_member` rows remain durable DM routing and authorization state.
+- `dm_pair` rows remain durable DM routing and authorization state.
 - Snapshot tables may be rebuilt from durable upstream events if needed.

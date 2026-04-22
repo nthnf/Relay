@@ -2,7 +2,7 @@
 
 pub use super::chat_message::Entity as ChatMessage;
 pub use super::conversation::Entity as Conversation;
-pub use super::conversation_member::Entity as ConversationMember;
+pub use super::dm_pair::Entity as DmPair;
 pub use super::outbox_event::Entity as OutboxEvent;
 pub use super::user_snapshot::Entity as UserSnapshot;
 pub use super::workspace_channel_snapshot::Entity as WorkspaceChannelSnapshot;
