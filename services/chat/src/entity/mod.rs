@@ -4,6 +4,7 @@ pub mod prelude;
 
 pub mod chat_message;
 pub mod conversation;
+pub mod conversation_read_cursor;
 pub mod dm_pair;
 pub mod outbox_event;
 pub mod user_snapshot;

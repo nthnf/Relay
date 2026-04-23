@@ -12,7 +12,7 @@ use testcontainers_modules::{
 use tonic::{Code, Request, metadata::MetadataValue, transport::Server};
 use uuid::Uuid;
 
-use chat_crate::entity::{conversation, dm_pair, user_snapshot, workspace_channel_snapshot, workspace_snapshot};
+use chat_crate::entity::{conversation, dm_pair, outbox_event, user_snapshot, workspace_channel_snapshot, workspace_snapshot};
 use chat_crate::grpc::ChatServer;
 use migration::{Migrator, MigratorTrait};
 
@@ -53,6 +53,9 @@ async fn create_conversation_rejects_existing_workspace_channel_conversation()
         .await?;
     assert_eq!(convo_rows.len(), 1);
 
+    let outbox_rows: Vec<outbox_event::Model> = outbox_event::Entity::find().all(&env.db).await?;
+    assert_eq!(outbox_rows.len(), 0);
+
     env.shutdown().await;
     Ok(())
 }
@@ -81,6 +84,22 @@ async fn create_conversation_creates_dm_conversation_and_pair()
         .await?
         .into_inner();
 
+    let repeat_err = env
+        .client
+        .clone()
+        .create_conversation(actor_request(
+            actor_user_id,
+            CreateConversationRequest {
+                target_type: ConversationTargetType::Dm as i32,
+                peer_user_id: Some(peer_user_id.to_string()),
+                workspace_channel_id: None,
+            },
+        ))
+        .await
+        .unwrap_err();
+
+    assert_eq!(repeat_err.code(), Code::AlreadyExists);
+
     let conversation_id = Uuid::parse_str(&response.conversation_id)?;
 
     let conversation_row: conversation::Model = conversation::Entity::find_by_id(conversation_id)
@@ -104,6 +123,11 @@ async fn create_conversation_creates_dm_conversation_and_pair()
 
     assert_eq!(dm_pair_row.low_user_id, low_user_id);
     assert_eq!(dm_pair_row.high_user_id, high_user_id);
+
+    let outbox_rows: Vec<outbox_event::Model> = outbox_event::Entity::find().all(&env.db).await?;
+    assert_eq!(outbox_rows.len(), 2);
+    assert!(outbox_rows.iter().any(|row| row.event_type == "DmPairCreated"));
+    assert!(outbox_rows.iter().any(|row| row.event_type == "ConversationCreated"));
 
     env.shutdown().await;
     Ok(())

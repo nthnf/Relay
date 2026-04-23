@@ -29,46 +29,46 @@ impl Handler {
         let message_id = Uuid::parse_str(&message_id)
             .map_err(|_| Status::invalid_argument("Invalid message ID"))?;
 
-        let now = Utc::now();
         let mut workspace_client = self.clients.workspace.clone();
         let mut realtime_client = self.clients.realtime.clone();
-
-        let message = chat_message::Entity::find_by_id(message_id)
-            .one(&self.connection)
-            .await
-            .map_err(|e| {
-                error!(error = %e, "Chat message lookup failed");
-                Status::internal("Internal Server Error")
-            })?
-            .ok_or_else(|| Status::not_found("Message not found"))?;
-
-        let conversation = conversation::Entity::find_by_id(message.conversation_id)
-            .one(&self.connection)
-            .await
-            .map_err(|e| {
-                error!(error = %e, "Conversation lookup failed");
-                Status::internal("Internal Server Error")
-            })?
-            .ok_or_else(|| Status::not_found("Conversation not found"))?;
-
-        let channel_context = if conversation.target_type == "channel" {
-            Some(
-                authorize_channel_write(
-                    &self.connection,
-                    &mut workspace_client,
-                    actor_user_id,
-                    &conversation,
-                )
-                .await?,
-            )
-        } else {
-            None
-        };
 
         let (response, realtime_message) = self
             .connection
             .transaction::<_, (Response<DeleteMessageResponse>, Option<DeliverMessageRequest>), Status>(|txn| {
                 Box::pin(async move {
+                    let now = Utc::now();
+                    let message = chat_message::Entity::find_by_id(message_id)
+                        .one(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "Chat message lookup failed");
+                            Status::internal("Internal Server Error")
+                        })?
+                        .ok_or_else(|| Status::not_found("Message not found"))?;
+
+                    let conversation = conversation::Entity::find_by_id(message.conversation_id)
+                        .one(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "Conversation lookup failed");
+                            Status::internal("Internal Server Error")
+                        })?
+                        .ok_or_else(|| Status::not_found("Conversation not found"))?;
+
+                    let channel_context = if conversation.target_type == "channel" {
+                        Some(
+                            authorize_channel_write(
+                                txn,
+                                &mut workspace_client,
+                                actor_user_id,
+                                &conversation,
+                            )
+                            .await?,
+                        )
+                    } else {
+                        None
+                    };
+
                     if message.author_user_id != actor_user_id {
                         return Err(Status::permission_denied("Permission denied"));
                     }

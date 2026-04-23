@@ -285,6 +285,57 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
+                    .table(ConversationReadCursor::Table)
+                    .if_not_exists()
+                    .col(uuid(ConversationReadCursor::UserId).not_null())
+                    .col(uuid(ConversationReadCursor::ConversationId).not_null())
+                    .col(
+                        big_integer(ConversationReadCursor::LastReadConversationMessageSeq)
+                            .not_null(),
+                    )
+                    .col(
+                        timestamp_with_time_zone(ConversationReadCursor::ReadAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .col(
+                        timestamp_with_time_zone(ConversationReadCursor::UpdatedAt)
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .primary_key(
+                        Index::create()
+                            .col(ConversationReadCursor::UserId)
+                            .col(ConversationReadCursor::ConversationId),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-conversation-read-cursor-conversation-id")
+                            .from(
+                                ConversationReadCursor::Table,
+                                ConversationReadCursor::ConversationId,
+                            )
+                            .to(Conversation::Table, Conversation::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .if_not_exists()
+                    .name("idx-conversation-read-cursor-conversation-id")
+                    .table(ConversationReadCursor::Table)
+                    .col(ConversationReadCursor::ConversationId)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
                     .table(OutboxEvent::Table)
                     .if_not_exists()
                     .col(uuid(OutboxEvent::EventId).not_null().primary_key())
@@ -323,6 +374,17 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
             .drop_table(Table::drop().table(OutboxEvent::Table).to_owned())
+            .await?;
+        manager
+            .drop_index(
+                Index::drop()
+                    .name("idx-conversation-read-cursor-conversation-id")
+                    .table(ConversationReadCursor::Table)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .drop_table(Table::drop().table(ConversationReadCursor::Table).to_owned())
             .await?;
         manager
             .drop_index(
@@ -452,6 +514,16 @@ enum ChatMessage {
     DeletedByUserId,
     LastEditedAt,
     LastEditedByUserId,
+}
+
+#[derive(DeriveIden)]
+enum ConversationReadCursor {
+    Table,
+    UserId,
+    ConversationId,
+    LastReadConversationMessageSeq,
+    ReadAt,
+    UpdatedAt,
 }
 
 #[derive(DeriveIden)]

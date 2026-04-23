@@ -14,7 +14,7 @@ As an active workspace member, when I create a new channel the application creat
 
 ## Start or reopen a direct message with another user
 
-As an authenticated user, I can press a dedicated DM-create or DM-open button for another user so chat creates or returns a stable 1:1 `conversation_id` and persists messages for that conversation without depending on workspace channel state.
+As an authenticated user, I can press a dedicated DM-create button for another user so chat creates a stable 1:1 `conversation_id` once and persists messages for that conversation without depending on workspace channel state.
 
 ## Edit or delete my own message
 

@@ -5,14 +5,14 @@ flowchart LR
     Gateway[Envoy Gateway]
     Bootstrap[bootstrap]
     RabbitMQ[RabbitMQ]
-    Projections[(bootstrap projections\nuser_home_projection\nfriend_projection\nworkspace_projection\nworkspace_channel_projection\nuser_unread_counter)]
+    Projections[(bootstrap projections\nuser_app_projection\nworkspace_projection\nworkspace_channel_projection\ndm_projection\nuser_unread_counter)]
 
     Client -->|HTTP app request| App
     App -->|approved backend gRPC read| Gateway
-    Gateway -->|GetHome / ListFriends / ListWorkspaces / GetWorkspaceSidebar| Bootstrap
+    Gateway -->|GetAppBootstrap / GetWorkspaceBootstrap / GetDmBootstrap| Bootstrap
     Bootstrap -->|read denormalized rows| Projections
 
-    RabbitMQ -->|UserRegistered\nUserProfileUpdated\nFriendRequestAccepted\nFriendshipRemoved\nWorkspaceCreated\nWorkspaceMemberAdded\nWorkspaceMemberRemoved\nWorkspaceChannelCreated\nMessageCreated\nMessageEdited\nMessageDeleted| Bootstrap
+    RabbitMQ -->|UserRegistered\nUserProfileUpdated\nFriendRequestCreated\nFriendRequestAccepted\nFriendRequestRejected\nFriendRequestCanceledByBlock\nWorkspaceCreated\nWorkspaceMemberAdded\nWorkspaceMemberRemoved\nWorkspaceChannelCreated\nConversationCreated\nDmPairCreated\nMessageCreated\nMessageEdited\nMessageDeleted\nConversationReadCursorUpdated| Bootstrap
     Bootstrap -->|upsert projection rows| Projections
-    Bootstrap -->|compute unread/preview from event payload + local membership projections| Projections
+    Bootstrap -->|compute unread, counts, previews from event payload + local projections| Projections
 ```

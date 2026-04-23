@@ -47,10 +47,40 @@ pub struct MessageDeletedPayload {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConversationReadCursorUpdatedPayload {
+    pub conversation_id: String,
+    pub target_type: ConversationTargetType,
+    pub workspace_channel_id: Option<String>,
+    pub user_id: String,
+    pub last_read_conversation_message_seq: i64,
+    pub read_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ChatEvent {
+    ConversationCreated(ConversationCreatedPayload),
+    DmPairCreated(DmPairCreatedPayload),
     MessageCreated(MessageCreatedPayload),
     MessageEdited(MessageEditedPayload),
     MessageDeleted(MessageDeletedPayload),
+    ConversationReadCursorUpdated(ConversationReadCursorUpdatedPayload),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConversationCreatedPayload {
+    pub conversation_id: String,
+    pub target_type: ConversationTargetType,
+    pub dm_pair_id: Option<String>,
+    pub workspace_channel_id: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DmPairCreatedPayload {
+    pub dm_pair_id: String,
+    pub low_user_id: String,
+    pub high_user_id: String,
+    pub created_at: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]

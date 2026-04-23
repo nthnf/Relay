@@ -1,6 +1,6 @@
 ## gRPC Service Scope
 
-Chat exposes hot-path message-write commands, bounded conversation history reads, and minimal 1:1 DM conversation lifecycle reads and writes. External application servers through Envoy Gateway are primary callers for end-user send, edit, delete, history, explicit DM-create or DM-open flows, and one-time channel conversation creation after channel creation succeeds.
+Chat exposes hot-path message-write commands, bounded conversation history reads, and minimal 1:1 DM conversation lifecycle reads and writes. External application servers through Envoy Gateway are primary callers for end-user send, edit, delete, history, explicit DM-create flows, and one-time channel conversation creation after channel creation succeeds.
 
 ## Shared Contract Rules
 
@@ -8,6 +8,7 @@ Chat exposes hot-path message-write commands, bounded conversation history reads
 - External application callers do not supply actor identity in request payloads for end-user actions.
 - Chat enforces chat-local invariants and uses synchronous `workspace.AuthorizeChannelAction` for workspace-channel authorization.
 - Chat authorizes DMs through `conversation.dm_pair_id` and owned `dm_pair` rows.
+- Chat owns per-user per-conversation read cursor writes used for unread convergence.
 - Domain writes and matching `outbox_event` inserts happen in same transaction.
 - Chat remains durable message-write authority; synchronous `realtime.DeliverMessage` happens only after durable write success.
 - `realtime` notify failure must not roll back committed message-create write.
@@ -133,8 +134,8 @@ Chat exposes hot-path message-write commands, bounded conversation history reads
 
 **Typical invocation patterns**
 
-- `DM`: user presses a dedicated DM-create or DM-open action; the caller invokes `CreateConversation` once for that participant pair and reuses the returned `conversation_id` afterward.
-- `WORKSPACE_CHANNEL`: after a successful channel-creation flow, the caller invokes `CreateConversation` once for the new channel so the channel has a stable chat-owned `conversation_id` before normal messaging starts.
+- `DM`: user presses dedicated DM-create action; caller invokes `CreateConversation` once for that participant pair to mint stable chat-owned `conversation_id`.
+- `WORKSPACE_CHANNEL`: after successful channel-creation flow, caller invokes `CreateConversation` once for new channel so channel has stable chat-owned `conversation_id` before normal messaging starts.
 
 **Request fields**
 
@@ -145,24 +146,47 @@ Chat exposes hot-path message-write commands, bounded conversation history reads
 **Response fields**
 
 - `conversation_id` (`uuid`)
-- `member_user_ids` (`repeated uuid`) - exactly actor and peer user IDs
 - `created_at` (`timestamp`)
-- `created` (`bool`)
 
 **Contract notes**
 
 - For `DM`, reject self-DM creation in v1.
-- For `DM`, this method is the explicit create-or-open entry point behind the user-facing DM action; repeated calls must return the existing conversation for the same pair.
-- For `DM`, require local `user_snapshot` row for `peer_user_id` before creating or returning conversation.
+- For `DM`, this method is create-only; repeated calls for existing normalized participant pair must fail with `ALREADY_EXISTS`.
+- For `DM`, require local `user_snapshot` row for `peer_user_id` before creating conversation.
 - For `DM`, normalize `(authenticated actor, peer_user_id)` into `(low_user_id, high_user_id)` by comparing raw UUID values.
-- For `DM`, return existing durable conversation when one already exists for normalized participant pair.
-- For `DM`, lookup existing 1:1 conversation by `(low_user_id, high_user_id)` before insert so duplicate DM conversations are not created.
+- For `DM`, lookup existing 1:1 conversation by `(low_user_id, high_user_id)` before insert and reject if one already exists.
 - For `CHANNEL`, require matching `workspace_snapshot` and `workspace_channel_snapshot` rows first.
 - For `CHANNEL`, this method is typically called once immediately after channel creation succeeds; it is not primarily a lazy first-message setup path.
-- For `CHANNEL`, call `workspace.AuthorizeChannelAction(..., READ)` or `WRITE` as needed before creating or returning conversation.
-- For `CHANNEL`, return existing durable conversation when one already exists for channel.
+- For `CHANNEL`, call `workspace.AuthorizeChannelAction(..., READ)` or `WRITE` as needed before creating conversation.
+- For `CHANNEL`, reject with `ALREADY_EXISTS` when conversation already exists for channel.
 - For `CHANNEL`, keep `conversation_id` distinct from `workspace_channel_id`; channel identity stays workspace-owned while message-stream identity stays chat-owned.
 - When no conversation exists, create one `conversation` row with requested target type in one transaction.
 - For `DM`, create one `dm_pair` row in the same transaction as the `conversation` row.
 - For `DM`, store resulting pair reference on `conversation.dm_pair_id` in same transaction.
-- This method does not publish dedicated conversation-created event in v1.
+- This method publishes `ConversationCreated` for every newly created conversation.
+- For new DM conversations, chat also publishes `DmPairCreated` when it creates the normalized pair row.
+
+### `MarkConversationRead`
+
+**Main caller:** external application server through Envoy Gateway
+
+**Request fields**
+
+- `conversation_id` (`uuid`)
+- `last_read_conversation_message_seq` (`int64`)
+
+**Response fields**
+
+- `conversation_id` (`uuid`)
+- `last_read_conversation_message_seq` (`int64`)
+- `read_at` (`timestamp`)
+- `updated` (`bool`)
+
+**Contract notes**
+
+- For workspace-channel conversations, call `workspace.AuthorizeChannelAction(..., READ)` synchronously.
+- For DMs, validate actor matches either participant on `dm_pair` row.
+- Upsert one chat-owned read cursor row keyed by `(actor_user_id, conversation_id)`.
+- Cursor is monotonic; lower or duplicate sequence values must not move stored read position backward.
+- Publish `ConversationReadCursorUpdated` only when stored cursor advances.
+- Bootstrap and other downstream consumers use durable read-cursor event to converge unread counters; chat remains source of truth for cursor write.

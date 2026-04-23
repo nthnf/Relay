@@ -11,66 +11,28 @@ message UserCard {
   optional string avatar_url = 4;
 }
 
-message HomeSummary {
-  int32 friend_count = 1;
-  int32 workspace_count = 2;
-  int32 unread_workspace_count = 3;
-  int32 total_unread_count = 4;
+message AppSummary {
+  int32 workspace_count = 1;
+  int32 unread_workspace_count = 2;
+  int32 total_unread_count = 3;
+  int32 pending_friend_request_count = 4;
 }
 
-message FriendListItem {
-  string friend_user_id = 1;
-  string username = 2;
-  string display_name = 3;
-  optional string avatar_url = 4;
-  bool email_verified = 5;
-}
-
-message WorkspaceCard {
+message AppWorkspaceItem {
   string workspace_id = 1;
   string name = 2;
   optional string icon_url = 3;
-  int32 member_count = 4;
-  int32 channel_count = 5;
-  int32 unread_count = 6;
-  string last_message_preview = 7;
-  optional google.protobuf.Timestamp last_activity_at = 8;
 }
 
-message WorkspaceSidebarChannel {
-  string channel_id = 1;
-  string name = 2;
-  string channel_kind = 3;
-  int32 position = 4;
-  int32 unread_count = 5;
+message GetAppBootstrapRequest {}
+
+message GetAppBootstrapResponse {
+  UserCard viewer = 1;
+  AppSummary summary = 2;
+  repeated AppWorkspaceItem workspaces = 3;
 }
 
-message GetHomeRequest {}
-
-message GetHomeResponse {
-  UserCard user = 1;
-  HomeSummary summary = 2;
-  repeated FriendListItem friends_preview = 3;
-  repeated WorkspaceCard workspaces = 4;
-}
-
-message ListFriendsRequest {}
-
-message ListFriendsResponse {
-  repeated FriendListItem items = 1;
-}
-
-message ListWorkspacesRequest {}
-
-message ListWorkspacesResponse {
-  repeated WorkspaceCard items = 1;
-}
-
-message GetWorkspaceSidebarRequest {
-  string workspace_id = 1;
-}
-
-message WorkspaceSidebarHeader {
+message WorkspaceBootstrapHeader {
   string workspace_id = 1;
   string name = 2;
   optional string icon_url = 3;
@@ -79,14 +41,45 @@ message WorkspaceSidebarHeader {
   optional google.protobuf.Timestamp last_activity_at = 6;
 }
 
-message GetWorkspaceSidebarResponse {
-  WorkspaceSidebarHeader workspace = 1;
-  repeated WorkspaceSidebarChannel channels = 2;
+message WorkspaceBootstrapChannel {
+  string channel_id = 1;
+  string conversation_id = 2;
+  string name = 3;
+  string channel_kind = 4;
+  int32 position = 5;
+  int32 unread_count = 6;
+  int32 mention_count = 7;
+}
+
+message GetWorkspaceBootstrapRequest {
+  string workspace_id = 1;
+}
+
+message GetWorkspaceBootstrapResponse {
+  WorkspaceBootstrapHeader workspace = 1;
+  repeated WorkspaceBootstrapChannel channels = 2;
+}
+
+message DmThreadItem {
+  string conversation_id = 1;
+  string dm_pair_id = 2;
+  string peer_user_id = 3;
+  string peer_username = 4;
+  string peer_display_name = 5;
+  optional string peer_avatar_url = 6;
+  int32 unread_count = 7;
+  string last_message_preview = 8;
+  optional google.protobuf.Timestamp last_activity_at = 9;
+}
+
+message GetDmBootstrapRequest {}
+
+message GetDmBootstrapResponse {
+  repeated DmThreadItem items = 1;
 }
 
 service BootstrapService {
-  rpc GetHome(GetHomeRequest) returns (GetHomeResponse);
-  rpc ListFriends(ListFriendsRequest) returns (ListFriendsResponse);
-  rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
-  rpc GetWorkspaceSidebar(GetWorkspaceSidebarRequest) returns (GetWorkspaceSidebarResponse);
+  rpc GetAppBootstrap(GetAppBootstrapRequest) returns (GetAppBootstrapResponse);
+  rpc GetWorkspaceBootstrap(GetWorkspaceBootstrapRequest) returns (GetWorkspaceBootstrapResponse);
+  rpc GetDmBootstrap(GetDmBootstrapRequest) returns (GetDmBootstrapResponse);
 }

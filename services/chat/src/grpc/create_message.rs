@@ -33,37 +33,37 @@ impl Handler {
         let conversation_id = Uuid::parse_str(&conversation_id)
             .map_err(|_| Status::invalid_argument("Invalid conversation ID"))?;
 
-        let now = Utc::now();
         let mut workspace_client = self.clients.workspace.clone();
         let mut realtime_client = self.clients.realtime.clone();
-
-        let conversation = conversation::Entity::find_by_id(conversation_id)
-            .one(&self.connection)
-            .await
-            .map_err(|e| {
-                error!(error = %e, "Conversation lookup failed");
-                Status::internal("Internal Server Error")
-            })?
-            .ok_or_else(|| Status::not_found("Conversation not found"))?;
-
-        let channel_context = if conversation.target_type == "channel" {
-            Some(
-                authorize_channel_write(
-                    &self.connection,
-                    &mut workspace_client,
-                    actor_user_id,
-                    &conversation,
-                )
-                .await?,
-            )
-        } else {
-            None
-        };
 
         let (response, realtime_message) = self
             .connection
             .transaction::<_, (Response<CreateMessageResponse>, Option<DeliverMessageRequest>), Status>(|txn| {
                 Box::pin(async move {
+                    let now = Utc::now();
+                    let conversation = conversation::Entity::find_by_id(conversation_id)
+                        .one(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "Conversation lookup failed");
+                            Status::internal("Internal Server Error")
+                        })?
+                        .ok_or_else(|| Status::not_found("Conversation not found"))?;
+
+                    let channel_context = if conversation.target_type == "channel" {
+                        Some(
+                            authorize_channel_write(
+                                txn,
+                                &mut workspace_client,
+                                actor_user_id,
+                                &conversation,
+                            )
+                            .await?,
+                        )
+                    } else {
+                        None
+                    };
+
                     let mut target_type = EventConversationTargetType::Dm;
                     let mut workspace_id = None;
                     let mut workspace_channel_id = None;

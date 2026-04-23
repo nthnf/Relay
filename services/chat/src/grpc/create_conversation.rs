@@ -7,10 +7,11 @@ use tonic::{Request, Response, Status};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::entity::{conversation, dm_pair, user_snapshot, workspace_channel_snapshot};
+use crate::entity::{conversation, dm_pair, outbox_event, user_snapshot, workspace_channel_snapshot};
 
 use super::handler::Handler;
-use relay_types::{actor_user_id, to_timestamp};
+use crate::events::{ConversationCreatedPayload, ConversationTargetType as EventConversationTargetType, DmPairCreatedPayload};
+use relay_types::{payload_value, actor_user_id, to_timestamp};
 
 impl Handler {
     pub(super) async fn create_conversation(
@@ -44,7 +45,6 @@ impl Handler {
                                 return Err(Status::invalid_argument("Cannot target self"));
                             }
 
-                            // Check valid peer user
                             user_snapshot::Entity::find_by_id(peer_user_id)
                                 .one(txn)
                                 .await
@@ -54,13 +54,13 @@ impl Handler {
                                 })?
                                 .ok_or_else(|| Status::not_found("User not found"))?;
 
-                            // Determine low high user
                             let (low_user_id, high_user_id) = if peer_user_id < actor_user_id {
                                 (peer_user_id, actor_user_id)
                             } else {
                                 (actor_user_id, peer_user_id)
                             };
 
+                            let conversation_id = Uuid::new_v4();
                             let dm_pair = dm_pair::Entity::find()
                                 .filter(dm_pair::Column::LowUserId.eq(low_user_id))
                                 .filter(dm_pair::Column::HighUserId.eq(high_user_id))
@@ -81,62 +81,144 @@ impl Handler {
                                         Status::internal("Internal Server Error")
                                     })?
                                 {
-                                    return Ok(Response::new(CreateConversationResponse {
-                                        conversation_id: existing_convo.id.to_string(),
-                                        created_at: Some(to_timestamp(
-                                            existing_convo.created_at.into(),
-                                        )),
-                                    }));
+                                    return Err(Status::already_exists(format!(
+                                        "Conversation already exists: {}",
+                                        existing_convo.id
+                                    )));
                                 }
 
-                                let conversation_id = Uuid::new_v4();
-                                let conversation = conversation::ActiveModel {
+                                conversation::Entity::insert(conversation::ActiveModel {
                                     id: Set(conversation_id),
                                     target_type: Set("dm".to_string()),
                                     dm_pair_id: Set(Some(dm_pair.id)),
                                     workspace_channel_id: Set(None),
                                     created_at: Set(now.into()),
-                                };
-                                conversation::Entity::insert(conversation)
-                                    .exec(txn)
-                                    .await
-                                    .map_err(|e| {
-                                        error!(error = %e, "Conversation insert failed");
-                                        Status::internal("Internal Server Error")
-                                    })?;
+                                })
+                                .exec(txn)
+                                .await
+                                .map_err(|e| {
+                                    error!(error = %e, "Conversation insert failed");
+                                    Status::internal("Internal Server Error")
+                                })?;
+
+                                let event_id = Uuid::new_v4();
+                                outbox_event::Entity::insert(outbox_event::ActiveModel {
+                                    event_id: Set(event_id),
+                                    aggregate_type: Set("conversation".to_string()),
+                                    aggregate_id: Set(conversation_id),
+                                    event_type: Set("ConversationCreated".to_string()),
+                                    payload: Set(payload_value(ConversationCreatedPayload {
+                                        conversation_id: conversation_id.to_string(),
+                                        target_type: EventConversationTargetType::Dm,
+                                        dm_pair_id: Some(dm_pair.id.to_string()),
+                                        workspace_channel_id: None,
+                                        created_at: now.to_rfc3339(),
+                                    })?),
+                                    status: Set("pending".to_string()),
+                                    publish_attempts: Set(0),
+                                    occurred_at: Set(now.into()),
+                                    available_at: Set(now.into()),
+                                    claimed_by: Set(None),
+                                    claimed_at: Set(None),
+                                    published_at: Set(None),
+                                    last_error: Set(None),
+                                    created_at: Set(now.into()),
+                                })
+                                .exec(txn)
+                                .await
+                                .map_err(|e| {
+                                    error!(error = %e, "Conversation created event insert failed");
+                                    Status::internal("Internal Server Error")
+                                })?;
 
                                 conversation_id
                             } else {
                                 let dm_pair_id = Uuid::new_v4();
-                                let dm_pair = dm_pair::ActiveModel {
+                                dm_pair::Entity::insert(dm_pair::ActiveModel {
                                     id: Set(dm_pair_id),
                                     low_user_id: Set(low_user_id),
                                     high_user_id: Set(high_user_id),
                                     created_at: Set(now.into()),
-                                };
-                                dm_pair::Entity::insert(dm_pair)
-                                    .exec(txn)
-                                    .await
-                                    .map_err(|e| {
-                                        error!(error = %e, "DM pair insert failed");
-                                        Status::internal("Internal Server Error")
-                                    })?;
+                                })
+                                .exec(txn)
+                                .await
+                                .map_err(|e| {
+                                    error!(error = %e, "DM pair insert failed");
+                                    Status::internal("Internal Server Error")
+                                })?;
 
-                                let conversation_id = Uuid::new_v4();
-                                let conversation = conversation::ActiveModel {
+                                let dm_pair_event_id = Uuid::new_v4();
+                                outbox_event::Entity::insert(outbox_event::ActiveModel {
+                                    event_id: Set(dm_pair_event_id),
+                                    aggregate_type: Set("dm_pair".to_string()),
+                                    aggregate_id: Set(dm_pair_id),
+                                    event_type: Set("DmPairCreated".to_string()),
+                                    payload: Set(payload_value(DmPairCreatedPayload {
+                                        dm_pair_id: dm_pair_id.to_string(),
+                                        low_user_id: low_user_id.to_string(),
+                                        high_user_id: high_user_id.to_string(),
+                                        created_at: now.to_rfc3339(),
+                                    })?),
+                                    status: Set("pending".to_string()),
+                                    publish_attempts: Set(0),
+                                    occurred_at: Set(now.into()),
+                                    available_at: Set(now.into()),
+                                    claimed_by: Set(None),
+                                    claimed_at: Set(None),
+                                    published_at: Set(None),
+                                    last_error: Set(None),
+                                    created_at: Set(now.into()),
+                                })
+                                .exec(txn)
+                                .await
+                                .map_err(|e| {
+                                    error!(error = %e, "DM pair created event insert failed");
+                                    Status::internal("Internal Server Error")
+                                })?;
+
+                                conversation::Entity::insert(conversation::ActiveModel {
                                     id: Set(conversation_id),
                                     target_type: Set("dm".to_string()),
                                     dm_pair_id: Set(Some(dm_pair_id)),
                                     workspace_channel_id: Set(None),
                                     created_at: Set(now.into()),
-                                };
-                                conversation::Entity::insert(conversation)
-                                    .exec(txn)
-                                    .await
-                                    .map_err(|e| {
-                                        error!(error = %e, "Conversation insert failed");
-                                        Status::internal("Internal Server Error")
-                                    })?;
+                                })
+                                .exec(txn)
+                                .await
+                                .map_err(|e| {
+                                    error!(error = %e, "Conversation insert failed");
+                                    Status::internal("Internal Server Error")
+                                })?;
+
+                                let conversation_event_id = Uuid::new_v4();
+                                outbox_event::Entity::insert(outbox_event::ActiveModel {
+                                    event_id: Set(conversation_event_id),
+                                    aggregate_type: Set("conversation".to_string()),
+                                    aggregate_id: Set(conversation_id),
+                                    event_type: Set("ConversationCreated".to_string()),
+                                    payload: Set(payload_value(ConversationCreatedPayload {
+                                        conversation_id: conversation_id.to_string(),
+                                        target_type: EventConversationTargetType::Dm,
+                                        dm_pair_id: Some(dm_pair_id.to_string()),
+                                        workspace_channel_id: None,
+                                        created_at: now.to_rfc3339(),
+                                    })?),
+                                    status: Set("pending".to_string()),
+                                    publish_attempts: Set(0),
+                                    occurred_at: Set(now.into()),
+                                    available_at: Set(now.into()),
+                                    claimed_by: Set(None),
+                                    claimed_at: Set(None),
+                                    published_at: Set(None),
+                                    last_error: Set(None),
+                                    created_at: Set(now.into()),
+                                })
+                                .exec(txn)
+                                .await
+                                .map_err(|e| {
+                                    error!(error = %e, "Conversation created event insert failed");
+                                    Status::internal("Internal Server Error")
+                                })?;
 
                                 conversation_id
                             }
@@ -194,6 +276,36 @@ impl Handler {
                                     error!(error = %e, "Conversation insert failed");
                                     Status::internal("Internal Server Error")
                                 })?;
+
+                            let event_id = Uuid::new_v4();
+                            outbox_event::Entity::insert(outbox_event::ActiveModel {
+                                event_id: Set(event_id),
+                                aggregate_type: Set("conversation".to_string()),
+                                aggregate_id: Set(conversation_id),
+                                event_type: Set("ConversationCreated".to_string()),
+                                payload: Set(payload_value(ConversationCreatedPayload {
+                                    conversation_id: conversation_id.to_string(),
+                                    target_type: EventConversationTargetType::WorkspaceChannel,
+                                    dm_pair_id: None,
+                                    workspace_channel_id: Some(workspace_channel_id.to_string()),
+                                    created_at: now.to_rfc3339(),
+                                })?),
+                                status: Set("pending".to_string()),
+                                publish_attempts: Set(0),
+                                occurred_at: Set(now.into()),
+                                available_at: Set(now.into()),
+                                claimed_by: Set(None),
+                                claimed_at: Set(None),
+                                published_at: Set(None),
+                                last_error: Set(None),
+                                created_at: Set(now.into()),
+                            })
+                            .exec(txn)
+                            .await
+                            .map_err(|e| {
+                                error!(error = %e, "Conversation created event insert failed");
+                                Status::internal("Internal Server Error")
+                            })?;
 
                             conversation_id
                         }

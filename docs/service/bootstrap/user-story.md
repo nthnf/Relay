@@ -1,17 +1,21 @@
 # Bootstrap User Stories
 
-## Load The Home Screen With One Aggregated Query
+## Load App Shell With One Aggregated Query
 
-As a signed-in user, I want the external SvelteKit server runtime to call bootstrap's `GetHome` RPC through Envoy Gateway and receive my profile summary, accepted-friend preview, workspace cards, and unread counts in one response so that the UI can render the initial home screen without a cascade of follow-up backend reads.
+As signed-in user, I want external SvelteKit server runtime to call bootstrap's `GetAppBootstrap` RPC through Envoy Gateway and receive my viewer profile, workspace sidebar rows, and badge counts in one response so UI can render first signed-in shell without cascade of backend reads.
 
-If some projections are still catching up, the application still receives the latest available snapshot, using empty collections or zero-count defaults instead of a missing-resource error.
+If some projections are still catching up, application still receives latest available snapshot, using empty collections or zero-count defaults instead of missing-resource error.
 
-## Fetch Workspace Sidebar Data Without Calling Multiple Domain Services
+## Fetch Workspace Shell Data With Conversation Mapping Included
 
-As a signed-in user, I want the external SvelteKit server runtime to call bootstrap's `GetWorkspaceSidebar` RPC through Envoy Gateway and receive workspace header data plus the ordered channel sidebar in one payload so that the UI does not need to fan out to workspace, membership, channel, and unread-specific services at runtime.
+As signed-in user, I want external SvelteKit server runtime to call bootstrap's `GetWorkspaceBootstrap` RPC through Envoy Gateway and receive workspace header data plus ordered channel list with chat `conversation_id` values already attached so UI can open workspace chat targets without extra lookup requests.
 
-If bootstrap already knows I can access the workspace but some channel projections lag, the application still receives the latest workspace snapshot and the latest available ordered channel list, which may be temporarily empty or partial.
+If bootstrap already knows I can access workspace but some channel projections lag, application still receives latest workspace snapshot and latest available ordered channel list, which may be temporarily empty or partial.
+
+## Fetch DM Shell Data On Demand
+
+As signed-in user, I want external SvelteKit server runtime to call bootstrap's `GetDmBootstrap` RPC only when I enter DM section so UI receives ordered DM thread list with peer summaries, unread counts, previews, and `conversation_id` values without bloating app first-paint bootstrap.
 
 ## Understand Short-Lived Query Lag After Recent Writes
 
-As a signed-in user, I understand that some query data may lag behind recent writes for a short period because bootstrap reads from asynchronously updated projections, so the client should tolerate brief eventual-consistency gaps after a friendship, workspace, channel, profile, or message write.
+As signed-in user, I understand that some query data may lag behind recent writes for short period because bootstrap reads from asynchronously updated projections, so client should tolerate brief eventual-consistency gaps after friendship, workspace, channel, conversation, read-cursor, profile, or message writes.

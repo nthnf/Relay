@@ -1,12 +1,13 @@
 ## Persistence Scope
 
-Chat owns durable conversation and message-write state in v1: conversation identity, normalized 1:1 DM participant pairs, minimal legitimacy snapshots, current message state, and soft-delete state. Other services must use chat gRPC or chat events instead of reading these tables directly.
+Chat owns durable conversation and message-write state in v1: conversation identity, normalized 1:1 DM participant pairs, minimal legitimacy snapshots, per-user read cursor state, current message state, and soft-delete state. Other services must use chat gRPC or chat events instead of reading these tables directly.
 
 ## Model Direction
 
 - Chat uses one durable `conversation_id` for both workspace-channel and DM message targets.
 - `conversation.target_type` distinguishes `channel` from `dm`.
 - `conversation_id` remains chat-owned and distinct from `workspace_channel_id` even for channel conversations.
+- `conversation_read_cursor` is chat-owned write model for per-user read progress.
 - `chat_message` points only to `conversation_id`.
 - Workspace-channel authorization remains synchronous to `workspace`; chat does not own workspace membership or permission truth.
 - User, workspace, and channel snapshots exist only so chat can reject unknown targets before or alongside sync auth.
@@ -34,8 +35,9 @@ Semantic rules:
 - For `target_type = channel`, `workspace_channel_id` is required.
 - `conversation_id` is the stable chat-owned message-stream address for both target types.
 - Workspace-channel conversations are created once after the channel already exists, typically as a follow-up `chat.CreateConversation` call after successful channel creation.
-- DM conversations are created from an explicit user action such as a dedicated DM-create or DM-open button.
+- DM conversations are created from explicit user action such as dedicated DM-create button.
 - One workspace channel may map to only one durable chat conversation, but the IDs remain separate because `workspace` owns channels and `chat` owns conversation streams.
+- Chat publishes `ConversationCreated` for every new durable conversation and `DmPairCreated` when it creates a new normalized DM pair.
 
 ### `dm_pair`
 
@@ -43,7 +45,7 @@ One normalized participant-pair row for each 1:1 DM conversation.
 
 | Column            | Type          | Notes                                                                 |
 | ----------------- | ------------- | --------------------------------------------------------------------- |
-| `dm_pair_id`      | `uuid`        | Primary key. Stable 1:1 participant-pair identifier.                  |
+| `id`              | `uuid`        | Primary key. Stable 1:1 participant-pair identifier.                  |
 | `low_user_id`     | `uuid`        | Lower UUID of the two DM participants after canonical ordering.       |
 | `high_user_id`    | `uuid`        | Higher UUID of the two DM participants after canonical ordering.      |
 | `created_at`      | `timestamptz` | DM pair row creation time.                                            |
@@ -134,10 +136,31 @@ Semantic rules:
 - Ordering is scoped to one conversation through `conversation_message_seq`.
 - Soft delete keeps row for history, idempotency, and downstream recovery.
 
+### `conversation_read_cursor`
+
+One row per user and conversation storing latest durable read progress accepted by chat.
+
+| Column                           | Type          | Notes                                                            |
+| -------------------------------- | ------------- | ---------------------------------------------------------------- |
+| `user_id`                        | `uuid`        | Identity-owned reader reference.                                 |
+| `conversation_id`                | `uuid`        | Durable target reference for both DMs and workspace channels.    |
+| `last_read_conversation_message_seq` | `bigint`   | Highest durable conversation sequence marked read by user.       |
+| `read_at`                        | `timestamptz` | Time cursor last advanced.                                       |
+| `updated_at`                     | `timestamptz` | Last mutation time.                                              |
+
+Semantic rules:
+
+- `conversation_read_cursor` is source-of-truth user read-progress state for unread convergence.
+- There is at most one row per `(user_id, conversation_id)`.
+- Cursor is monotonic and must never move backward.
+- Workspace-channel cursor writes still require synchronous workspace read authorization.
+- DM cursor writes are authorized locally through `dm_pair` ownership.
+
 ## Relations
 
 - `chat_message.conversation_id -> conversation.conversation_id`
-- `conversation.dm_pair_id -> dm_pair.dm_pair_id`
+- `conversation_read_cursor.conversation_id -> conversation.conversation_id`
+- `conversation.dm_pair_id -> dm_pair.id`
 - `workspace_channel_snapshot.workspace_id -> workspace_snapshot.workspace_id` by value only, not cross-service foreign key
 
 ## Index and Constraint Notes
@@ -153,6 +176,7 @@ Semantic rules:
 - Unique constraint on `(low_user_id, high_user_id)` preserves one durable DM conversation per unordered pair.
 - Unique constraint on `(conversation_id, conversation_message_seq)` preserves stable per-conversation ordering.
 - Unique constraint on `(author_user_id, conversation_id, client_message_id)` where `client_message_id IS NOT NULL` enforces retry-safe create semantics.
+- Unique constraint on `(user_id, conversation_id)` preserves one read cursor per actor and conversation.
 
 ## Cross-Service References
 
@@ -168,5 +192,6 @@ Semantic rules:
 
 - `chat_message` rows remain after soft delete in v1.
 - `conversation` rows remain durable target identity for both DMs and workspace channels.
+- `conversation_read_cursor` rows remain durable read-progress state and may be replay-rebuilt only from chat-owned source data.
 - `dm_pair` rows remain durable DM routing and authorization state.
 - Snapshot tables may be rebuilt from durable upstream events if needed.

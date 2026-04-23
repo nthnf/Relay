@@ -3,6 +3,7 @@ use relay_proto::chat::{
     CreateConversationRequest, CreateConversationResponse, CreateMessageRequest,
     CreateMessageResponse, DeleteMessageRequest, DeleteMessageResponse, EditMessageRequest,
     EditMessageResponse, ListConversationMessagesRequest, ListMessagesResponse,
+    MarkConversationReadRequest, MarkConversationReadResponse,
     chat_service_server::{ChatService, ChatServiceServer},
 };
 use sea_orm::DatabaseConnection;
@@ -16,7 +17,10 @@ pub struct Handler {
 
 impl Handler {
     pub fn new(connection: DatabaseConnection, clients: Clients) -> Self {
-        Self { connection, clients }
+        Self {
+            connection,
+            clients,
+        }
     }
 
     pub fn with_clients(connection: DatabaseConnection, clients: Clients) -> Self {
@@ -63,5 +67,12 @@ impl ChatService for Handler {
         request: Request<CreateConversationRequest>,
     ) -> Result<Response<CreateConversationResponse>, Status> {
         self.create_conversation(request).await
+    }
+
+    async fn mark_conversation_read(
+        &self,
+        request: Request<MarkConversationReadRequest>,
+    ) -> Result<Response<MarkConversationReadResponse>, Status> {
+        self.mark_conversation_read(request).await
     }
 }

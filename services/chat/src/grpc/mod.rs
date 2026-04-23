@@ -7,5 +7,6 @@ pub mod channel_write_auth;
 pub mod delete_message;
 pub mod edit_message;
 pub mod list_conversation_messages;
+pub mod mark_conversation_read;
 
 pub use handler::Handler as ChatServer;
