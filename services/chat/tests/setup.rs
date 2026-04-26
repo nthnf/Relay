@@ -44,7 +44,10 @@ pub async fn start_clients() -> Result<(Clients, MockServers), Box<dyn std::erro
     let realtime = connect_realtime_client(&realtime_url).await?;
 
     Ok((
-        Clients { workspace, realtime },
+        Clients {
+            workspace,
+            realtime,
+        },
         MockServers {
             shutdown: vec![workspace_shutdown, realtime_shutdown],
             tasks: vec![workspace_task, realtime_task],
@@ -52,8 +55,7 @@ pub async fn start_clients() -> Result<(Clients, MockServers), Box<dyn std::erro
     ))
 }
 
-async fn start_workspace_mock(
-) -> Result<
+async fn start_workspace_mock() -> Result<
     (
         String,
         tokio::task::JoinHandle<Result<(), tonic::transport::Error>>,
@@ -78,8 +80,7 @@ async fn start_workspace_mock(
     Ok((format!("http://{addr}"), server_task, shutdown_tx))
 }
 
-async fn start_realtime_mock(
-) -> Result<
+async fn start_realtime_mock() -> Result<
     (
         String,
         tokio::task::JoinHandle<Result<(), tonic::transport::Error>>,
@@ -160,7 +161,9 @@ impl WorkspaceService for MockWorkspaceService {
         &self,
         _request: Request<AuthorizeChannelActionRequest>,
     ) -> Result<Response<AuthorizeChannelActionResponse>, Status> {
-        Ok(Response::new(AuthorizeChannelActionResponse { allowed: true }))
+        Ok(Response::new(AuthorizeChannelActionResponse {
+            allowed: true,
+        }))
     }
 
     async fn create_channel(

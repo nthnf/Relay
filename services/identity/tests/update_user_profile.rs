@@ -22,7 +22,10 @@ fn update_profile_request(
     if let Some(user_id) = user_id {
         request.metadata_mut().insert(
             relay_types::ACTOR_USER_ID_METADATA,
-            user_id.to_string().parse().expect("user id metadata should be valid"),
+            user_id
+                .to_string()
+                .parse()
+                .expect("user id metadata should be valid"),
         );
     }
 

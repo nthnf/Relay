@@ -3,8 +3,8 @@ mod common;
 
 use chrono::{Duration, Utc};
 use common::{
-    TestEnv, auth_keys, hash_token_for_test, insert_email_verification_token,
-    insert_user_account, insert_user_profile,
+    TestEnv, auth_keys, hash_token_for_test, insert_email_verification_token, insert_user_account,
+    insert_user_profile,
 };
 use identity::entity::{email_verification_token, outbox_event, user_account, user_session};
 use relay_proto::identity::RedeemEmailVerificationTokenRequest;
@@ -57,7 +57,10 @@ async fn redeem_email_verification_token_creates_first_session_and_outbox()
     assert!(response.access_token_expires_at.is_some());
     assert!(response.refresh_token_expires_at.is_some());
     assert!(response.email_verified);
-    assert_eq!(response.profile.as_ref().map(|p| p.username.as_str()), Some("alice"));
+    assert_eq!(
+        response.profile.as_ref().map(|p| p.username.as_str()),
+        Some("alice")
+    );
 
     let claims = auth_keys().verify_access_token(&response.access_token)?;
     assert_eq!(claims.user_id, user_id);

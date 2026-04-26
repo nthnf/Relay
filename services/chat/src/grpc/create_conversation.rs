@@ -7,11 +7,16 @@ use tonic::{Request, Response, Status};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::entity::{conversation, dm_pair, outbox_event, user_snapshot, workspace_channel_snapshot};
+use crate::entity::{
+    conversation, dm_pair, outbox_event, user_snapshot, workspace_channel_snapshot,
+};
 
 use super::handler::Handler;
-use crate::events::{ConversationCreatedPayload, ConversationTargetType as EventConversationTargetType, DmPairCreatedPayload};
-use relay_types::{payload_value, actor_user_id, to_timestamp};
+use crate::events::{
+    ConversationCreatedPayload, ConversationTargetType as EventConversationTargetType,
+    DmPairCreatedPayload,
+};
+use relay_types::{actor_user_id, payload_value, to_timestamp};
 
 impl Handler {
     pub(super) async fn create_conversation(

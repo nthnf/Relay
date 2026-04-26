@@ -20,7 +20,15 @@ async fn authenticate_password_returns_tokens_and_creates_session()
     let password = "plain-password";
     let password_hash = hash_password_for_test(password);
 
-    insert_user_account(&env.db, user_id, "alice@example.com", Some(now), "active", now).await?;
+    insert_user_account(
+        &env.db,
+        user_id,
+        "alice@example.com",
+        Some(now),
+        "active",
+        now,
+    )
+    .await?;
     insert_user_profile(
         &env.db,
         user_id,
@@ -50,7 +58,10 @@ async fn authenticate_password_returns_tokens_and_creates_session()
     assert!(response.access_token_expires_at.is_some());
     assert!(response.refresh_token_expires_at.is_some());
     assert!(response.email_verified);
-    assert_eq!(response.profile.as_ref().map(|p| p.username.as_str()), Some("alice"));
+    assert_eq!(
+        response.profile.as_ref().map(|p| p.username.as_str()),
+        Some("alice")
+    );
 
     let claims = auth_keys().verify_access_token(&response.access_token)?;
     assert_eq!(claims.user_id, user_id);
@@ -59,7 +70,10 @@ async fn authenticate_password_returns_tokens_and_creates_session()
     let sessions = user_session::Entity::find().all(&env.db).await?;
     assert_eq!(sessions.len(), 1);
     assert_eq!(sessions[0].user_id, user_id);
-    assert_eq!(sessions[0].refresh_token_hash, hash_token_for_test(&response.refresh_token));
+    assert_eq!(
+        sessions[0].refresh_token_hash,
+        hash_token_for_test(&response.refresh_token)
+    );
 
     env.shutdown().await;
     Ok(())
@@ -72,7 +86,15 @@ async fn authenticate_password_rejects_invalid_credentials()
     let now = Utc::now();
     let user_id = Uuid::new_v4();
 
-    insert_user_account(&env.db, user_id, "alice@example.com", Some(now), "active", now).await?;
+    insert_user_account(
+        &env.db,
+        user_id,
+        "alice@example.com",
+        Some(now),
+        "active",
+        now,
+    )
+    .await?;
     insert_password_credential(
         &env.db,
         user_id,

@@ -14,9 +14,33 @@ async fn get_users_by_ids_returns_profiles_from_single_batch_lookup()
     let first_user_id = Uuid::new_v4();
     let second_user_id = Uuid::new_v4();
 
-    insert_user_account(&env.db, first_user_id, "alice@example.com", None, "active", now).await?;
-    insert_user_account(&env.db, second_user_id, "bob@example.com", None, "active", now).await?;
-    insert_user_profile(&env.db, first_user_id, "alice", "Alice", Some("https://cdn.example.com/alice.png"), now).await?;
+    insert_user_account(
+        &env.db,
+        first_user_id,
+        "alice@example.com",
+        None,
+        "active",
+        now,
+    )
+    .await?;
+    insert_user_account(
+        &env.db,
+        second_user_id,
+        "bob@example.com",
+        None,
+        "active",
+        now,
+    )
+    .await?;
+    insert_user_profile(
+        &env.db,
+        first_user_id,
+        "alice",
+        "Alice",
+        Some("https://cdn.example.com/alice.png"),
+        now,
+    )
+    .await?;
     insert_user_profile(&env.db, second_user_id, "bob", "Bob", None, now).await?;
 
     let response = env

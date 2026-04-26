@@ -157,7 +157,8 @@ async fn wait_for_tcp_port(port: u16) -> Result<(), Box<dyn std::error::Error>> 
     ))
 }
 
-async fn start_upstream_echo_server() -> Result<(u16, tokio::task::JoinHandle<()>), Box<dyn std::error::Error>> {
+async fn start_upstream_echo_server()
+-> Result<(u16, tokio::task::JoinHandle<()>), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
     let port = listener.local_addr()?.port();
 

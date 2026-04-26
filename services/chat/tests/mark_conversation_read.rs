@@ -7,8 +7,8 @@ use chat_crate::entity::{
 };
 use chat_crate::grpc::ChatServer;
 use migration::{Migrator, MigratorTrait};
-use relay_proto::chat::chat_service_client::ChatServiceClient;
 use relay_proto::chat::MarkConversationReadRequest;
+use relay_proto::chat::chat_service_client::ChatServiceClient;
 use sea_orm::{ColumnTrait, Database, EntityTrait, QueryFilter};
 use testcontainers_modules::{
     postgres::Postgres,
@@ -70,8 +70,7 @@ async fn mark_conversation_read_inserts_cursor_and_outbox_for_dm()
 }
 
 #[tokio::test]
-async fn mark_conversation_read_keeps_cursor_monotonic()
--> Result<(), Box<dyn std::error::Error>> {
+async fn mark_conversation_read_keeps_cursor_monotonic() -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
     let peer_user_id = Uuid::new_v4();

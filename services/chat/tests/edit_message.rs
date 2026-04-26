@@ -22,8 +22,7 @@ use migration::{Migrator, MigratorTrait};
 const ACTOR_USER_ID_METADATA: &str = "x-user-id";
 
 #[tokio::test]
-async fn edit_message_updates_body_and_outbox()
--> Result<(), Box<dyn std::error::Error>> {
+async fn edit_message_updates_body_and_outbox() -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
     let workspace_id = Uuid::new_v4();
@@ -65,25 +64,29 @@ async fn edit_message_updates_body_and_outbox()
     assert_eq!(response.message_id, created.message_id);
     assert_eq!(response.body, "new body");
 
-    let message_row: chat_message::Model = chat_message::Entity::find_by_id(Uuid::parse_str(&created.message_id)?)
-        .one(&env.db)
-        .await?
-        .expect("message row");
+    let message_row: chat_message::Model =
+        chat_message::Entity::find_by_id(Uuid::parse_str(&created.message_id)?)
+            .one(&env.db)
+            .await?
+            .expect("message row");
     assert_eq!(message_row.body, "new body");
     assert!(message_row.last_edited_at.is_some());
     assert_eq!(message_row.last_edited_by_user_id, Some(actor_user_id));
 
     let outbox_rows: Vec<outbox_event::Model> = outbox_event::Entity::find().all(&env.db).await?;
     assert_eq!(outbox_rows.len(), 2);
-    assert!(outbox_rows.iter().any(|row| row.event_type == "MessageEdited"));
+    assert!(
+        outbox_rows
+            .iter()
+            .any(|row| row.event_type == "MessageEdited")
+    );
 
     env.shutdown().await;
     Ok(())
 }
 
 #[tokio::test]
-async fn edit_message_rejects_non_author()
--> Result<(), Box<dyn std::error::Error>> {
+async fn edit_message_rejects_non_author() -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
     let other_user_id = Uuid::new_v4();

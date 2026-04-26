@@ -384,7 +384,11 @@ impl MigrationTrait for Migration {
             )
             .await?;
         manager
-            .drop_table(Table::drop().table(ConversationReadCursor::Table).to_owned())
+            .drop_table(
+                Table::drop()
+                    .table(ConversationReadCursor::Table)
+                    .to_owned(),
+            )
             .await?;
         manager
             .drop_index(

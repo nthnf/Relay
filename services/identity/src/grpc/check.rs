@@ -17,13 +17,16 @@ impl Handler {
         let request = request.into_inner();
         let headers = request.get_client_headers().cloned().unwrap_or_default();
 
-        let access_token = headers.iter().find_map(|(key, value)| {
-            key.eq_ignore_ascii_case("authorization").then(|| {
-                value
-                    .strip_prefix("Bearer ")
-                    .or_else(|| value.strip_prefix("bearer "))
+        let access_token = headers
+            .iter()
+            .find_map(|(key, value)| {
+                key.eq_ignore_ascii_case("authorization").then(|| {
+                    value
+                        .strip_prefix("Bearer ")
+                        .or_else(|| value.strip_prefix("bearer "))
+                })
             })
-        }).flatten();
+            .flatten();
 
         let Some(access_token) = access_token else {
             return Ok(Response::new(deny("missing bearer token")));

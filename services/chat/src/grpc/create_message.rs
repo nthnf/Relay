@@ -4,7 +4,9 @@ use relay_proto::realtime::{
     DeliverMessageRequest, DeliverTargetKind,
     MessageCreatedPayload as RealtimeMessageCreatedPayload, deliver_message_request,
 };
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect, Set, TransactionError, TransactionTrait};
+use sea_orm::{
+    ColumnTrait, EntityTrait, QueryFilter, QuerySelect, Set, TransactionError, TransactionTrait,
+};
 use tonic::{Request, Response, Status};
 use tracing::error;
 use uuid::Uuid;
@@ -14,7 +16,7 @@ use crate::{
     events::{ConversationTargetType as EventConversationTargetType, MessageCreatedPayload},
 };
 
-use super::channel_write_auth::{authorize_channel_write, ChannelWriteContext};
+use super::channel_write_auth::{ChannelWriteContext, authorize_channel_write};
 use super::handler::Handler;
 use relay_types::{actor_user_id, payload_value, to_timestamp};
 
@@ -38,7 +40,10 @@ impl Handler {
 
         let (response, realtime_message) = self
             .connection
-            .transaction::<_, (Response<CreateMessageResponse>, Option<DeliverMessageRequest>), Status>(|txn| {
+            .transaction::<_, (
+                Response<CreateMessageResponse>,
+                Option<DeliverMessageRequest>,
+            ), Status>(|txn| {
                 Box::pin(async move {
                     let now = Utc::now();
                     let conversation = conversation::Entity::find_by_id(conversation_id)
@@ -83,7 +88,9 @@ impl Handler {
                                 })?
                                 .ok_or_else(|| Status::not_found("Conversation not found"))?;
 
-                            if actor_user_id != dm_pair.low_user_id && actor_user_id != dm_pair.high_user_id {
+                            if actor_user_id != dm_pair.low_user_id
+                                && actor_user_id != dm_pair.high_user_id
+                            {
                                 return Err(Status::permission_denied("Permission denied"));
                             }
                         }
@@ -120,7 +127,9 @@ impl Handler {
                                 author_user_id: existing.author_user_id.to_string(),
                                 conversation_message_seq: existing.conversation_message_seq,
                                 body: existing.body,
-                                created_at: Some(to_timestamp(existing.created_at.with_timezone(&Utc))),
+                                created_at: Some(to_timestamp(
+                                    existing.created_at.with_timezone(&Utc),
+                                )),
                             }),
                             None,
                         ));
@@ -129,7 +138,10 @@ impl Handler {
                     let next_conversation_message_seq = chat_message::Entity::find()
                         .filter(chat_message::Column::ConversationId.eq(conversation_id))
                         .select_only()
-                        .column_as(chat_message::Column::ConversationMessageSeq.max(), "max_seq")
+                        .column_as(
+                            chat_message::Column::ConversationMessageSeq.max(),
+                            "max_seq",
+                        )
                         .into_tuple::<Option<i64>>()
                         .one(txn)
                         .await

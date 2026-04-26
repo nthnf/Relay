@@ -11,13 +11,13 @@ use identity::{
 use migration::{Migrator, MigratorTrait};
 use relay_proto::identity::identity_service_client::IdentityServiceClient;
 use sea_orm::{ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter, Set};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
 use tonic::transport::Server;
 use uuid::Uuid;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 pub struct TestEnv {
     _postgres: testcontainers_modules::testcontainers::ContainerAsync<Postgres>,

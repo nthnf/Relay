@@ -41,7 +41,15 @@ async fn resend_verification_email_accepts_verified_user_without_side_effects()
     let now = Utc::now();
     let user_id = Uuid::new_v4();
 
-    insert_user_account(&env.db, user_id, "alice@example.com", Some(now), "active", now).await?;
+    insert_user_account(
+        &env.db,
+        user_id,
+        "alice@example.com",
+        Some(now),
+        "active",
+        now,
+    )
+    .await?;
 
     let response = env
         .client
@@ -92,7 +100,9 @@ async fn resend_verification_email_replaces_active_tokens_and_writes_event()
 
     assert!(response.accepted);
 
-    let tokens = email_verification_token::Entity::find().all(&env.db).await?;
+    let tokens = email_verification_token::Entity::find()
+        .all(&env.db)
+        .await?;
     assert_eq!(tokens.len(), 2);
     assert!(tokens.iter().any(|token| token.consumed_at.is_some()));
     assert!(tokens.iter().any(|token| token.consumed_at.is_none()));

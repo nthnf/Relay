@@ -1,6 +1,6 @@
 use relay_proto::workspace::{AuthorizeChannelActionRequest, ChannelAction};
 use sea_orm::{ConnectionTrait, EntityTrait};
-use tonic::{metadata::MetadataValue, Request, Status};
+use tonic::{Request, Status, metadata::MetadataValue};
 use uuid::Uuid;
 
 use crate::entity::{conversation, workspace_channel_snapshot, workspace_snapshot};
@@ -15,7 +15,9 @@ pub(super) struct ChannelWriteContext {
 
 pub(super) async fn authorize_channel_read(
     connection: &impl ConnectionTrait,
-    workspace_client: &mut relay_proto::workspace::workspace_service_client::WorkspaceServiceClient<tonic::transport::Channel>,
+    workspace_client: &mut relay_proto::workspace::workspace_service_client::WorkspaceServiceClient<
+        tonic::transport::Channel,
+    >,
     actor_user_id: Uuid,
     conversation: &conversation::Model,
 ) -> Result<ChannelWriteContext, Status> {
@@ -31,7 +33,9 @@ pub(super) async fn authorize_channel_read(
 
 pub(super) async fn authorize_channel_write(
     connection: &impl ConnectionTrait,
-    workspace_client: &mut relay_proto::workspace::workspace_service_client::WorkspaceServiceClient<tonic::transport::Channel>,
+    workspace_client: &mut relay_proto::workspace::workspace_service_client::WorkspaceServiceClient<
+        tonic::transport::Channel,
+    >,
     actor_user_id: Uuid,
     conversation: &conversation::Model,
 ) -> Result<ChannelWriteContext, Status> {
@@ -47,7 +51,9 @@ pub(super) async fn authorize_channel_write(
 
 async fn authorize_channel_action(
     connection: &impl ConnectionTrait,
-    workspace_client: &mut relay_proto::workspace::workspace_service_client::WorkspaceServiceClient<tonic::transport::Channel>,
+    workspace_client: &mut relay_proto::workspace::workspace_service_client::WorkspaceServiceClient<
+        tonic::transport::Channel,
+    >,
     actor_user_id: Uuid,
     conversation: &conversation::Model,
     action: ChannelAction,
@@ -56,23 +62,25 @@ async fn authorize_channel_action(
         .workspace_channel_id
         .ok_or_else(|| Status::not_found("Conversation not found"))?;
 
-    let workspace_channel_snapshot = workspace_channel_snapshot::Entity::find_by_id(workspace_channel_id)
-        .one(connection)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Workspace channel snapshot lookup failed");
-            Status::internal("Internal Server Error")
-        })?
-        .ok_or_else(|| Status::not_found("Workspace channel not found"))?;
+    let workspace_channel_snapshot =
+        workspace_channel_snapshot::Entity::find_by_id(workspace_channel_id)
+            .one(connection)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Workspace channel snapshot lookup failed");
+                Status::internal("Internal Server Error")
+            })?
+            .ok_or_else(|| Status::not_found("Workspace channel not found"))?;
 
-    let workspace_snapshot = workspace_snapshot::Entity::find_by_id(workspace_channel_snapshot.workspace_id)
-        .one(connection)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Workspace snapshot lookup failed");
-            Status::internal("Internal Server Error")
-        })?
-        .ok_or_else(|| Status::not_found("Workspace not found"))?;
+    let workspace_snapshot =
+        workspace_snapshot::Entity::find_by_id(workspace_channel_snapshot.workspace_id)
+            .one(connection)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Workspace snapshot lookup failed");
+                Status::internal("Internal Server Error")
+            })?
+            .ok_or_else(|| Status::not_found("Workspace not found"))?;
 
     let mut authorize_request = Request::new(AuthorizeChannelActionRequest {
         workspace_id: workspace_snapshot.workspace_id.to_string(),

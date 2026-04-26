@@ -1,10 +1,12 @@
 use chrono::Utc;
 use relay_proto::chat::{EditMessageRequest, EditMessageResponse};
 use relay_proto::realtime::{
-    DeliverMessageRequest, DeliverTargetKind,
-    MessageEditedPayload as RealtimeMessageEditedPayload, deliver_message_request,
+    DeliverMessageRequest, DeliverTargetKind, MessageEditedPayload as RealtimeMessageEditedPayload,
+    deliver_message_request,
 };
-use sea_orm::{ActiveModelTrait, EntityTrait, IntoActiveModel, Set, TransactionError, TransactionTrait};
+use sea_orm::{
+    ActiveModelTrait, EntityTrait, IntoActiveModel, Set, TransactionError, TransactionTrait,
+};
 use tonic::{Request, Response, Status};
 use tracing::error;
 use uuid::Uuid;
@@ -14,7 +16,7 @@ use crate::{
     events::{ConversationTargetType as EventConversationTargetType, MessageEditedPayload},
 };
 
-use super::channel_write_auth::{authorize_channel_write, ChannelWriteContext};
+use super::channel_write_auth::{ChannelWriteContext, authorize_channel_write};
 use super::handler::Handler;
 use relay_types::{actor_user_id, payload_value, to_timestamp};
 
@@ -24,7 +26,10 @@ impl Handler {
         request: Request<EditMessageRequest>,
     ) -> Result<Response<EditMessageResponse>, Status> {
         let actor_user_id = actor_user_id(&request)?;
-        let EditMessageRequest { message_id, new_body } = request.into_inner();
+        let EditMessageRequest {
+            message_id,
+            new_body,
+        } = request.into_inner();
 
         let message_id = Uuid::parse_str(&message_id)
             .map_err(|_| Status::invalid_argument("Invalid message ID"))?;

@@ -2,9 +2,7 @@
 mod common;
 
 use common::{TestEnv, insert_user_account, insert_user_profile};
-use identity::{
-    entity::{outbox_event, user_account, user_profile},
-};
+use identity::entity::{outbox_event, user_account, user_profile};
 use relay_proto::identity::RegisterUserRequest;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use uuid::Uuid;
@@ -51,10 +49,16 @@ async fn register_user_persists_identity_state_and_outbox_events()
         .all(&env.db)
         .await?;
     assert_eq!(outbox_rows.len(), 2);
-    assert!(outbox_rows.iter().any(|row| row.event_type == "UserRegistered"));
-    assert!(outbox_rows
-        .iter()
-        .any(|row| row.event_type == "VerificationEmailRequested"));
+    assert!(
+        outbox_rows
+            .iter()
+            .any(|row| row.event_type == "UserRegistered")
+    );
+    assert!(
+        outbox_rows
+            .iter()
+            .any(|row| row.event_type == "VerificationEmailRequested")
+    );
 
     env.shutdown().await;
     Ok(())
@@ -67,15 +71,7 @@ async fn register_user_returns_already_exists_for_duplicate_email()
     let now = chrono::Utc::now();
     let user_id = Uuid::new_v4();
 
-    insert_user_account(
-        &env.db,
-        user_id,
-        "alice@example.com",
-        None,
-        "active",
-        now,
-    )
-    .await?;
+    insert_user_account(&env.db, user_id, "alice@example.com", None, "active", now).await?;
 
     let error = env
         .client

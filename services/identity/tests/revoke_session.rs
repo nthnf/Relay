@@ -11,8 +11,8 @@ use sea_orm::EntityTrait;
 use uuid::Uuid;
 
 #[tokio::test]
-async fn revoke_session_updates_session_and_writes_outbox()
--> Result<(), Box<dyn std::error::Error>> {
+async fn revoke_session_updates_session_and_writes_outbox() -> Result<(), Box<dyn std::error::Error>>
+{
     let env = TestEnv::start().await?;
     let now = Utc::now();
     let session_id = Uuid::new_v4();
@@ -107,8 +107,7 @@ async fn revoke_session_is_idempotent_for_already_revoked_session()
 }
 
 #[tokio::test]
-async fn revoke_session_rejects_invalid_session_id()
--> Result<(), Box<dyn std::error::Error>> {
+async fn revoke_session_rejects_invalid_session_id() -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
 
     let error = env

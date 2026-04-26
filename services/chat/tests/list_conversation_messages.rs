@@ -2,8 +2,8 @@ extern crate chat as chat_crate;
 
 mod setup;
 
-use relay_proto::chat::chat_service_client::ChatServiceClient;
 use relay_proto::chat::ListConversationMessagesRequest;
+use relay_proto::chat::chat_service_client::ChatServiceClient;
 use sea_orm::{Database, EntityTrait};
 use testcontainers_modules::{
     postgres::Postgres,
@@ -83,8 +83,8 @@ async fn list_conversation_messages_paginates_channel_messages()
 }
 
 #[tokio::test]
-async fn list_conversation_messages_rejects_non_dm_member()
--> Result<(), Box<dyn std::error::Error>> {
+async fn list_conversation_messages_rejects_non_dm_member() -> Result<(), Box<dyn std::error::Error>>
+{
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
     let peer_user_id = Uuid::new_v4();

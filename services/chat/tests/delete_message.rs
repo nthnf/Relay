@@ -9,7 +9,7 @@ use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
 };
-use tonic::{metadata::MetadataValue, transport::Server, Request};
+use tonic::{Request, metadata::MetadataValue, transport::Server};
 use uuid::Uuid;
 
 use chat_crate::entity::{
@@ -22,8 +22,8 @@ use migration::{Migrator, MigratorTrait};
 const ACTOR_USER_ID_METADATA: &str = "x-user-id";
 
 #[tokio::test]
-async fn delete_message_marks_deleted_and_is_idempotent()
--> Result<(), Box<dyn std::error::Error>> {
+async fn delete_message_marks_deleted_and_is_idempotent() -> Result<(), Box<dyn std::error::Error>>
+{
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
     let workspace_id = Uuid::new_v4();
@@ -66,10 +66,11 @@ async fn delete_message_marks_deleted_and_is_idempotent()
     assert!(!deleted.already_deleted);
     assert!(deleted.deleted_at.is_some());
 
-    let message_row: chat_message::Model = chat_message::Entity::find_by_id(Uuid::parse_str(&created.message_id)?)
-        .one(&env.db)
-        .await?
-        .expect("message row");
+    let message_row: chat_message::Model =
+        chat_message::Entity::find_by_id(Uuid::parse_str(&created.message_id)?)
+            .one(&env.db)
+            .await?
+            .expect("message row");
     assert_eq!(message_row.message_status, "deleted");
     assert!(message_row.deleted_at.is_some());
     assert_eq!(message_row.deleted_by_user_id, Some(actor_user_id));
@@ -91,7 +92,11 @@ async fn delete_message_marks_deleted_and_is_idempotent()
 
     let outbox_rows: Vec<outbox_event::Model> = outbox_event::Entity::find().all(&env.db).await?;
     assert_eq!(outbox_rows.len(), 2);
-    assert!(outbox_rows.iter().any(|row| row.event_type == "MessageDeleted"));
+    assert!(
+        outbox_rows
+            .iter()
+            .any(|row| row.event_type == "MessageDeleted")
+    );
 
     env.shutdown().await;
     Ok(())

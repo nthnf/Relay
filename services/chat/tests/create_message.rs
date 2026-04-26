@@ -2,8 +2,8 @@ extern crate chat as chat_crate;
 
 mod setup;
 
-use relay_proto::chat::chat_service_client::ChatServiceClient;
 use relay_proto::chat::CreateMessageRequest;
+use relay_proto::chat::chat_service_client::ChatServiceClient;
 use sea_orm::{ColumnTrait, Database, EntityTrait, QueryFilter};
 use testcontainers_modules::{
     postgres::Postgres,
@@ -22,8 +22,7 @@ use migration::{Migrator, MigratorTrait};
 const ACTOR_USER_ID_METADATA: &str = "x-user-id";
 
 #[tokio::test]
-async fn create_message_persists_channel_message()
--> Result<(), Box<dyn std::error::Error>> {
+async fn create_message_persists_channel_message() -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
     let workspace_id = Uuid::new_v4();
@@ -71,8 +70,8 @@ async fn create_message_persists_channel_message()
 }
 
 #[tokio::test]
-async fn create_message_idempotent_on_client_message_id()
--> Result<(), Box<dyn std::error::Error>> {
+async fn create_message_idempotent_on_client_message_id() -> Result<(), Box<dyn std::error::Error>>
+{
     let env = TestEnv::start().await?;
     let actor_user_id = Uuid::new_v4();
     let peer_user_id = Uuid::new_v4();
@@ -114,7 +113,10 @@ async fn create_message_idempotent_on_client_message_id()
         .into_inner();
 
     assert_eq!(first.message_id, second.message_id);
-    assert_eq!(first.conversation_message_seq, second.conversation_message_seq);
+    assert_eq!(
+        first.conversation_message_seq,
+        second.conversation_message_seq
+    );
 
     let message_rows: Vec<chat_message::Model> = chat_message::Entity::find()
         .filter(chat_message::Column::ConversationId.eq(conversation_id))

@@ -4,7 +4,9 @@ use relay_proto::realtime::{
     DeliverMessageRequest, DeliverTargetKind,
     MessageDeletedPayload as RealtimeMessageDeletedPayload, deliver_message_request,
 };
-use sea_orm::{ActiveModelTrait, EntityTrait, IntoActiveModel, Set, TransactionError, TransactionTrait};
+use sea_orm::{
+    ActiveModelTrait, EntityTrait, IntoActiveModel, Set, TransactionError, TransactionTrait,
+};
 use tonic::{Request, Response, Status};
 use tracing::error;
 use uuid::Uuid;
@@ -14,7 +16,7 @@ use crate::{
     events::{ConversationTargetType as EventConversationTargetType, MessageDeletedPayload},
 };
 
-use super::channel_write_auth::{authorize_channel_write, ChannelWriteContext};
+use super::channel_write_auth::{ChannelWriteContext, authorize_channel_write};
 use super::handler::Handler;
 use relay_types::{actor_user_id, payload_value, to_timestamp};
 
@@ -34,7 +36,10 @@ impl Handler {
 
         let (response, realtime_message) = self
             .connection
-            .transaction::<_, (Response<DeleteMessageResponse>, Option<DeliverMessageRequest>), Status>(|txn| {
+            .transaction::<_, (
+                Response<DeleteMessageResponse>,
+                Option<DeliverMessageRequest>,
+            ), Status>(|txn| {
                 Box::pin(async move {
                     let now = Utc::now();
                     let message = chat_message::Entity::find_by_id(message_id)
@@ -75,15 +80,15 @@ impl Handler {
 
                     if message.message_status == "deleted" {
                         return Ok((
-                        Response::new(DeleteMessageResponse {
-                            message_id: message.message_id.to_string(),
-                            conversation_id: message.conversation_id.to_string(),
-                            deleted_at: message
-                                .deleted_at
-                                .map(|dt| to_timestamp(dt.with_timezone(&Utc))),
-                            deleted: false,
-                            already_deleted: true,
-                        }),
+                            Response::new(DeleteMessageResponse {
+                                message_id: message.message_id.to_string(),
+                                conversation_id: message.conversation_id.to_string(),
+                                deleted_at: message
+                                    .deleted_at
+                                    .map(|dt| to_timestamp(dt.with_timezone(&Utc))),
+                                deleted: false,
+                                already_deleted: true,
+                            }),
                             None,
                         ));
                     }
@@ -127,13 +132,10 @@ impl Handler {
                     active.deleted_at = Set(Some(now.into()));
                     active.deleted_by_user_id = Set(Some(actor_user_id));
                     active.updated_at = Set(now.into());
-                    active
-                        .update(txn)
-                        .await
-                        .map_err(|e| {
-                            error!(error = %e, "Chat message delete failed");
-                            Status::internal("Internal Server Error")
-                        })?;
+                    active.update(txn).await.map_err(|e| {
+                        error!(error = %e, "Chat message delete failed");
+                        Status::internal("Internal Server Error")
+                    })?;
 
                     let event_id = Uuid::new_v4();
                     let payload = payload_value(MessageDeletedPayload {

@@ -53,7 +53,10 @@ mod tests {
     use tonic::Request;
     use uuid::Uuid;
 
-    fn get_user_profile_request(actor_user_id: Option<Uuid>, user_id: Option<Uuid>) -> Request<GetUserProfileRequest> {
+    fn get_user_profile_request(
+        actor_user_id: Option<Uuid>,
+        user_id: Option<Uuid>,
+    ) -> Request<GetUserProfileRequest> {
         let mut request = Request::new(GetUserProfileRequest {
             user_id: user_id.map(|user_id| user_id.to_string()),
         });
@@ -61,7 +64,10 @@ mod tests {
         if let Some(actor_user_id) = actor_user_id {
             request.metadata_mut().insert(
                 relay_types::ACTOR_USER_ID_METADATA,
-                actor_user_id.to_string().parse().expect("user id metadata should be valid"),
+                actor_user_id
+                    .to_string()
+                    .parse()
+                    .expect("user id metadata should be valid"),
             );
         }
 

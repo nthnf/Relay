@@ -20,7 +20,15 @@ async fn refresh_session_rotates_session_and_returns_new_tokens()
     let old_session_id = Uuid::new_v4();
     let refresh_token = "refresh-token-value";
 
-    insert_user_account(&env.db, user_id, "alice@example.com", Some(now), "active", now).await?;
+    insert_user_account(
+        &env.db,
+        user_id,
+        "alice@example.com",
+        Some(now),
+        "active",
+        now,
+    )
+    .await?;
     insert_user_profile(
         &env.db,
         user_id,
@@ -61,7 +69,10 @@ async fn refresh_session_rotates_session_and_returns_new_tokens()
     assert!(response.access_token_expires_at.is_some());
     assert!(response.refresh_token_expires_at.is_some());
     assert!(response.email_verified);
-    assert_eq!(response.profile.as_ref().map(|p| p.username.as_str()), Some("alice"));
+    assert_eq!(
+        response.profile.as_ref().map(|p| p.username.as_str()),
+        Some("alice")
+    );
 
     let claims = auth_keys().verify_access_token(&response.access_token)?;
     assert_eq!(claims.user_id, user_id);
@@ -82,15 +93,17 @@ async fn refresh_session_rotates_session_and_returns_new_tokens()
         .iter()
         .find(|session| session.session_id == new_session_id)
         .expect("new session row");
-    assert_eq!(new_session.refresh_token_hash, hash_token_for_test(&response.refresh_token));
+    assert_eq!(
+        new_session.refresh_token_hash,
+        hash_token_for_test(&response.refresh_token)
+    );
 
     env.shutdown().await;
     Ok(())
 }
 
 #[tokio::test]
-async fn refresh_session_rejects_invalid_refresh_token()
--> Result<(), Box<dyn std::error::Error>> {
+async fn refresh_session_rejects_invalid_refresh_token() -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
 
     let error = env
@@ -111,15 +124,22 @@ async fn refresh_session_rejects_invalid_refresh_token()
 }
 
 #[tokio::test]
-async fn refresh_session_rejects_revoked_refresh_token()
--> Result<(), Box<dyn std::error::Error>> {
+async fn refresh_session_rejects_revoked_refresh_token() -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
     let now = Utc::now();
     let user_id = Uuid::new_v4();
     let session_id = Uuid::new_v4();
     let refresh_token = "revoked-refresh-token";
 
-    insert_user_account(&env.db, user_id, "alice@example.com", Some(now), "active", now).await?;
+    insert_user_account(
+        &env.db,
+        user_id,
+        "alice@example.com",
+        Some(now),
+        "active",
+        now,
+    )
+    .await?;
     insert_user_profile(&env.db, user_id, "alice", "Alice", None, now).await?;
     insert_user_session(
         &env.db,
@@ -153,15 +173,22 @@ async fn refresh_session_rejects_revoked_refresh_token()
 }
 
 #[tokio::test]
-async fn refresh_session_rejects_expired_refresh_token()
--> Result<(), Box<dyn std::error::Error>> {
+async fn refresh_session_rejects_expired_refresh_token() -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
     let now = Utc::now();
     let user_id = Uuid::new_v4();
     let session_id = Uuid::new_v4();
     let refresh_token = "expired-refresh-token";
 
-    insert_user_account(&env.db, user_id, "alice@example.com", Some(now), "active", now).await?;
+    insert_user_account(
+        &env.db,
+        user_id,
+        "alice@example.com",
+        Some(now),
+        "active",
+        now,
+    )
+    .await?;
     insert_user_profile(&env.db, user_id, "alice", "Alice", None, now).await?;
     insert_user_session(
         &env.db,
