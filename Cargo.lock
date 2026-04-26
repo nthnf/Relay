@@ -4683,14 +4683,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "relay-config"
-version = "0.1.0"
-
-[[package]]
-name = "relay-errors"
-version = "0.1.0"
-
-[[package]]
 name = "relay-proto"
 version = "0.1.0"
 dependencies = [
@@ -4700,10 +4692,6 @@ dependencies = [
  "tonic-prost",
  "tonic-prost-build",
 ]
-
-[[package]]
-name = "relay-telemetry"
-version = "0.1.0"
 
 [[package]]
 name = "relay-types"

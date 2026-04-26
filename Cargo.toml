@@ -1,11 +1,8 @@
 [workspace]
 resolver = "3"
 members = [
-  "crates/relay-config",
   "crates/relay-amqp",
-  "crates/relay-errors",
   "crates/relay-proto",
-  "crates/relay-telemetry",
   "crates/relay-types",
   "services/bootstrap",
   "services/bootstrap/migration",
@@ -56,8 +53,5 @@ serde_json = "1"
 
 
 relay-proto = { path = "./crates/relay-proto" }
-relay-errors = { path = "./crates/relay-errors" }
-relay-config = { path = "./crates/relay-config" }
 relay-amqp = { path = "./crates/relay-amqp" }
-relay-telemetry = { path = "./crates/relay-telemetry" }
 relay-types = { path = "./crates/relay-types" }
