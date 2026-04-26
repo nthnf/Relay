@@ -1,9 +1,5 @@
 use chrono::{Duration as ChronoDuration, Utc};
-use email::{
-    amqp::Handler,
-    entity::outbound_email,
-    smtp::SmtpClient,
-};
+use email::{amqp::Handler, entity::outbound_email, smtp::SmtpClient};
 use futures_util::StreamExt;
 use lapin::{
     BasicProperties, Connection, ConnectionProperties, ExchangeKind,
@@ -14,8 +10,8 @@ use lapin::{
     types::FieldTable,
 };
 use migration::{Migrator, MigratorTrait};
-use reqwest::Client;
 use relay_amqp::{AmqpSubscriber, DeliveryContext};
+use reqwest::Client;
 use sea_orm::{ColumnTrait, Database, EntityTrait, QueryFilter};
 use serde_json::Value;
 use std::{collections::HashMap, time::Duration};
@@ -23,9 +19,9 @@ use testcontainers_modules::{
     postgres::Postgres,
     rabbitmq::RabbitMq,
     testcontainers::{
+        GenericImage,
         core::{IntoContainerPort, WaitFor},
         runners::AsyncRunner,
-        GenericImage,
     },
 };
 use uuid::Uuid;
@@ -98,7 +94,9 @@ async fn publishes_verification_email_to_mailpit() -> Result<(), Box<dyn std::er
             FieldTable::default(),
         )
         .await?;
-    channel.confirm_select(ConfirmSelectOptions::default()).await?;
+    channel
+        .confirm_select(ConfirmSelectOptions::default())
+        .await?;
 
     channel
         .basic_publish(
@@ -141,8 +139,14 @@ async fn publishes_verification_email_to_mailpit() -> Result<(), Box<dyn std::er
     assert!(captured.contains("Verify your Relay account"), "{captured}");
     assert!(captured.contains(&event.email), "{captured}");
     assert!(captured.contains(&event.verification_token), "{captured}");
-    assert!(captured.contains(&event.verification_token_expires_at), "{captured}");
-    assert!(captured.contains("Verify your email for Relay"), "{captured}");
+    assert!(
+        captured.contains(&event.verification_token_expires_at),
+        "{captured}"
+    );
+    assert!(
+        captured.contains("Verify your email for Relay"),
+        "{captured}"
+    );
 
     let stored = outbound_email::Entity::find()
         .filter(outbound_email::Column::DedupeKey.eq(format!(
@@ -189,9 +193,8 @@ impl TestEnv {
         let smtp_port = mailpit.get_host_port_ipv4(1025.tcp()).await?;
         let http_port = mailpit.get_host_port_ipv4(8025.tcp()).await?;
 
-        let database_url = format!(
-            "postgres://postgres:postgres@{postgres_host}:{postgres_port}/postgres"
-        );
+        let database_url =
+            format!("postgres://postgres:postgres@{postgres_host}:{postgres_port}/postgres");
         let amqp_addr = format!("amqp://{rabbitmq_host}:{rabbitmq_port}/%2f");
         let smtp_url = format!("smtp://{mailpit_host}:{smtp_port}");
         let mailpit_api_url = format!("http://{mailpit_host}:{http_port}");
@@ -213,8 +216,8 @@ impl TestEnv {
     }
 
     async fn amqp_channel(&self) -> Result<lapin::Channel, Box<dyn std::error::Error>> {
-        let connection = Connection::connect(&self.amqp_addr, ConnectionProperties::default())
-            .await?;
+        let connection =
+            Connection::connect(&self.amqp_addr, ConnectionProperties::default()).await?;
         let channel = connection.create_channel().await?;
         Ok(channel)
     }
@@ -253,31 +256,31 @@ async fn wait_for_mailpit_message(
 
     loop {
         let list_url = format!("{base_url}/api/v1/messages");
-        if let Ok(response) = client.get(&list_url).send().await {
-            if let Ok(response) = response.error_for_status() {
-                let body = response.text().await?;
-                if let Some(message_id) = extract_message_id(&body) {
-                    for detail_url in [
-                        format!("{base_url}/api/v1/message/{message_id}"),
-                        format!("{base_url}/api/v1/messages/{message_id}"),
-                    ] {
-                        if let Ok(detail_response) = client.get(&detail_url).send().await {
-                            if let Ok(detail_response) = detail_response.error_for_status() {
-                                let detail = detail_response.text().await?;
-                                if detail.contains("Verify your Relay account")
-                                    || detail.contains("token-123")
-                                    || detail.contains("Verify your email for Relay")
-                                {
-                                    return Ok(detail);
-                                }
-                            }
+        if let Ok(response) = client.get(&list_url).send().await
+            && let Ok(response) = response.error_for_status()
+        {
+            let body = response.text().await?;
+            if let Some(message_id) = extract_message_id(&body) {
+                for detail_url in [
+                    format!("{base_url}/api/v1/message/{message_id}"),
+                    format!("{base_url}/api/v1/messages/{message_id}"),
+                ] {
+                    if let Ok(detail_response) = client.get(&detail_url).send().await
+                        && let Ok(detail_response) = detail_response.error_for_status()
+                    {
+                        let detail = detail_response.text().await?;
+                        if detail.contains("Verify your Relay account")
+                            || detail.contains("token-123")
+                            || detail.contains("Verify your email for Relay")
+                        {
+                            return Ok(detail);
                         }
                     }
                 }
+            }
 
-                if body.contains("Verify your Relay account") || body.contains("token-123") {
-                    return Ok(body);
-                }
+            if body.contains("Verify your Relay account") || body.contains("token-123") {
+                return Ok(body);
             }
         }
 
