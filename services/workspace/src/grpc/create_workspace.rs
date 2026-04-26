@@ -84,14 +84,17 @@ impl Handler {
 
                     // Seed workspace role
                     let owner_role_id = Uuid::new_v4();
+                    let owner_permissions = permission::to_db(permission::owner())?;
+                    let admin_permissions = permission::to_db(permission::admin())?;
+                    let member_permissions = permission::to_db(permission::member())?;
+
                     let owner_role = workspace_role::ActiveModel {
                         id: Set(owner_role_id),
                         is_system_role: Set(true),
                         created_at: Set(now.into()),
                         workspace_id: Set(workspace_id),
                         name: Set("Owner".to_string()),
-                        permissions: Set(permission::to_db(permission::owner())
-                            .expect("owner permissions fit in i32")),
+                        permissions: Set(owner_permissions),
                     };
                     let admin_role = workspace_role::ActiveModel {
                         id: Set(Uuid::new_v4()),
@@ -99,8 +102,7 @@ impl Handler {
                         created_at: Set(now.into()),
                         workspace_id: Set(workspace_id),
                         name: Set("Admin".to_string()),
-                        permissions: Set(permission::to_db(permission::admin())
-                            .expect("admin permissions fit in i32")),
+                        permissions: Set(admin_permissions),
                     };
                     let member_role = workspace_role::ActiveModel {
                         id: Set(Uuid::new_v4()),
@@ -108,8 +110,7 @@ impl Handler {
                         created_at: Set(now.into()),
                         workspace_id: Set(workspace_id),
                         name: Set("Member".to_string()),
-                        permissions: Set(permission::to_db(permission::member())
-                            .expect("member permissions fit in i32")),
+                        permissions: Set(member_permissions),
                     };
                     workspace_role::Entity::insert_many(vec![owner_role, admin_role, member_role])
                         .exec(txn)

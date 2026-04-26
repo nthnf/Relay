@@ -8,7 +8,7 @@ Bootstrap exposes synchronous projection-backed read contracts for external Svel
 - Bootstrap serves projection-backed snapshots only; it does not perform write-side authorization or domain mutation.
 - Read responses may lag recent writes because upstream projections converge asynchronously.
 - Missing projected rows caused by lag return latest available snapshot shape rather than failing whole read when bootstrap already has evidence of access.
-- Collection ordering is contractual: workspaces sort by `last_activity_at` descending then `workspace_id`, workspace channels sort by `position` ascending then `channel_id`, and DMs sort by `last_activity_at` descending then `conversation_id`.
+- Collection ordering is contractual: workspaces sort by `workspace_name` ascending then `workspace_id`, workspace channels sort by `position` ascending then `channel_id`, and DMs sort by `last_activity_at` descending then `conversation_id`.
 
 ### `GetAppBootstrap`
 
@@ -21,8 +21,8 @@ Bootstrap exposes synchronous projection-backed read contracts for external Svel
 **Response fields**
 
 - `viewer` (`message`) with `user_id`, `username`, `display_name`, `avatar_url`
-- `summary` (`message`) with `workspace_count`, `unread_workspace_count`, `total_unread_count`, `pending_friend_request_count`
-- `workspaces` (`repeated message`) with `workspace_id`, `name`, `icon_url`
+- `workspaces` (`repeated message`) with `workspace_id`, `name`, `icon_url`, `unread_count`
+- `pending_friend_request_count` (`int32`)
 
 **Contract notes**
 
@@ -40,9 +40,9 @@ Bootstrap exposes synchronous projection-backed read contracts for external Svel
 
 **Response fields**
 
-- `workspace` (`message`) with latest available projected workspace header
+- `workspace` (`message`) with `workspace_id`, `name`, `icon_url`, `member_count`, and `unread_count`
 - `channels` (`repeated message`) ordered by position ascending then channel ID
-- each channel row includes `channel_id`, `conversation_id`, `name`, `channel_kind`, `position`, `unread_count`, and `mention_count`
+- each channel row includes `channel_id`, `conversation_id`, `name`, `channel_kind`, `position`, and `unread_count`
 
 **Contract notes**
 
@@ -61,7 +61,7 @@ Bootstrap exposes synchronous projection-backed read contracts for external Svel
 **Response fields**
 
 - `items` (`repeated message`) ordered by latest activity descending then conversation ID
-- each row includes `conversation_id`, `dm_pair_id`, peer profile summary, `unread_count`, `last_message_preview`, and `last_activity_at`
+- each row includes `conversation_id`, `dm_pair_id`, `peer_user_id`, peer profile summary, `unread_count`, `last_message_preview`, and `last_activity_at`
 
 **Contract notes**
 

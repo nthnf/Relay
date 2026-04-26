@@ -4,6 +4,12 @@ package relay.bootstrap;
 
 import "google/protobuf/timestamp.proto";
 
+service BootstrapService {
+  rpc GetAppBootstrap(GetAppBootstrapRequest) returns (GetAppBootstrapResponse);
+  rpc GetWorkspaceBootstrap(GetWorkspaceBootstrapRequest) returns (GetWorkspaceBootstrapResponse);
+  rpc GetDmBootstrap(GetDmBootstrapRequest) returns (GetDmBootstrapResponse);
+}
+
 message UserCard {
   string user_id = 1;
   string username = 2;
@@ -11,25 +17,19 @@ message UserCard {
   optional string avatar_url = 4;
 }
 
-message AppSummary {
-  int32 workspace_count = 1;
-  int32 unread_workspace_count = 2;
-  int32 total_unread_count = 3;
-  int32 pending_friend_request_count = 4;
-}
-
 message AppWorkspaceItem {
   string workspace_id = 1;
   string name = 2;
   optional string icon_url = 3;
+  int32 unread_count = 4;
 }
 
 message GetAppBootstrapRequest {}
 
 message GetAppBootstrapResponse {
   UserCard viewer = 1;
-  AppSummary summary = 2;
-  repeated AppWorkspaceItem workspaces = 3;
+  repeated AppWorkspaceItem workspaces = 2;
+  int32 pending_friend_request_count = 3;
 }
 
 message WorkspaceBootstrapHeader {
@@ -38,7 +38,6 @@ message WorkspaceBootstrapHeader {
   optional string icon_url = 3;
   int32 member_count = 4;
   int32 unread_count = 5;
-  optional google.protobuf.Timestamp last_activity_at = 6;
 }
 
 message WorkspaceBootstrapChannel {
@@ -48,7 +47,6 @@ message WorkspaceBootstrapChannel {
   string channel_kind = 4;
   int32 position = 5;
   int32 unread_count = 6;
-  int32 mention_count = 7;
 }
 
 message GetWorkspaceBootstrapRequest {
@@ -76,10 +74,4 @@ message GetDmBootstrapRequest {}
 
 message GetDmBootstrapResponse {
   repeated DmThreadItem items = 1;
-}
-
-service BootstrapService {
-  rpc GetAppBootstrap(GetAppBootstrapRequest) returns (GetAppBootstrapResponse);
-  rpc GetWorkspaceBootstrap(GetWorkspaceBootstrapRequest) returns (GetWorkspaceBootstrapResponse);
-  rpc GetDmBootstrap(GetDmBootstrapRequest) returns (GetDmBootstrapResponse);
 }

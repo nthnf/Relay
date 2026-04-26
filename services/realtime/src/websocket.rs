@@ -43,9 +43,7 @@ pub async fn run(
 
     let app = app(store, redis);
 
-    let listener = TcpListener::bind(bind_addr)
-        .await
-        .expect("bind realtime listener");
+    let listener = TcpListener::bind(bind_addr).await?;
 
     axum::serve(
         listener,

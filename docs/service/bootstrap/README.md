@@ -4,11 +4,10 @@ Bootstrap is platform hot-path query service for personalized app-shell reads. I
 
 ## Owned Read Models
 
-- `user_app_projection` for signed-in app-shell summary and badge counts.
-- `workspace_projection` for sidebar workspace rows.
+- `user_app_projection` for signed-in viewer data and friend-request badge.
+- `workspace_projection` for sidebar workspace rows and workspace unread badge.
 - `workspace_channel_projection` for workspace channel lists, including denormalized `conversation_id`.
 - `dm_projection` for DM thread lists, including denormalized `conversation_id`.
-- `user_unread_counter` for fast workspace-channel unread badges and aggregation.
 
 ## Non-Goals
 
@@ -44,10 +43,10 @@ See `grpc.md` for request and response contracts.
 V1 read semantics:
 
 - User-scoped collection reads return `200` with empty collections or zero-count defaults when projection has not materialized yet.
-- `GetAppBootstrap` returns latest available projected shell snapshot for authenticated actor and does not use not-found semantics for projection lag.
+- `GetAppBootstrap` returns latest available projected app shell snapshot for authenticated actor and does not use not-found semantics for projection lag.
 - `GetWorkspaceBootstrap` returns not found only when bootstrap has no projected evidence that actor can access workspace; otherwise it returns latest available projected snapshot, including empty `channels` collection if channel rows lag.
 - `GetDmBootstrap` returns latest available projected DM thread list for actor and does not wait for unrelated workspace projections.
-- Collection ordering is stable and contractual: workspaces sort by `last_activity_at` descending then `workspace_id`, workspace channels sort by `position` ascending then `channel_id`, and DMs sort by `last_activity_at` descending then `conversation_id`.
+- Collection ordering is stable and contractual: workspaces sort by `workspace_name` ascending then `workspace_id`, workspace channels sort by `position` ascending then `channel_id`, and DMs sort by `last_activity_at` descending then `conversation_id`.
 
 ## Event Dependencies
 

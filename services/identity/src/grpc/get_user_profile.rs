@@ -44,3 +44,54 @@ impl Handler {
         }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::AuthKeys;
+    use sea_orm::{DbBackend, MockDatabase};
+    use tonic::Request;
+    use uuid::Uuid;
+
+    fn get_user_profile_request(actor_user_id: Option<Uuid>, user_id: Option<Uuid>) -> Request<GetUserProfileRequest> {
+        let mut request = Request::new(GetUserProfileRequest {
+            user_id: user_id.map(|user_id| user_id.to_string()),
+        });
+
+        if let Some(actor_user_id) = actor_user_id {
+            request.metadata_mut().insert(
+                relay_types::ACTOR_USER_ID_METADATA,
+                actor_user_id.to_string().parse().expect("user id metadata should be valid"),
+            );
+        }
+
+        request
+    }
+
+    fn test_service() -> Handler {
+        Handler {
+            connection: MockDatabase::new(DbBackend::Postgres).into_connection(),
+            auth: AuthKeys::from_shared_secret(b"test-secret-key"),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_user_profile_rejects_cross_user_lookup_on_actor_route() {
+        let actor_user_id = Uuid::new_v4();
+        let other_user_id = Uuid::new_v4();
+
+        let error = test_service()
+            .get_user_profile(get_user_profile_request(
+                Some(actor_user_id),
+                Some(other_user_id),
+            ))
+            .await
+            .expect_err("cross-user profile lookup should be denied");
+
+        assert_eq!(error.code(), tonic::Code::PermissionDenied);
+        assert_eq!(
+            error.message(),
+            "cross-user profile lookup is not allowed on this route"
+        );
+    }
+}

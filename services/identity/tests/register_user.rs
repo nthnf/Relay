@@ -1,16 +1,13 @@
+#[allow(dead_code)]
+mod common;
+
+use common::{TestEnv, insert_user_account, insert_user_profile};
 use identity::{
-    auth::AuthKeys,
     entity::{outbox_event, user_account, user_profile},
-    grpc::IdentityServer,
 };
-use migration::{Migrator, MigratorTrait};
-use relay_proto::identity::{RegisterUserRequest, identity_service_client::IdentityServiceClient};
-use sea_orm::{ColumnTrait, Database, EntityTrait, QueryFilter};
-use testcontainers_modules::{
-    postgres::Postgres,
-    testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
-};
-use tonic::transport::Server;
+use relay_proto::identity::RegisterUserRequest;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use uuid::Uuid;
 
 #[tokio::test]
 async fn register_user_persists_identity_state_and_outbox_events()
@@ -54,88 +51,97 @@ async fn register_user_persists_identity_state_and_outbox_events()
         .all(&env.db)
         .await?;
     assert_eq!(outbox_rows.len(), 2);
-    assert!(
-        outbox_rows
-            .iter()
-            .any(|row| row.event_type == "UserRegistered")
-    );
-    assert!(
-        outbox_rows
-            .iter()
-            .any(|row| row.event_type == "VerificationEmailRequested")
-    );
+    assert!(outbox_rows.iter().any(|row| row.event_type == "UserRegistered"));
+    assert!(outbox_rows
+        .iter()
+        .any(|row| row.event_type == "VerificationEmailRequested"));
 
     env.shutdown().await;
     Ok(())
 }
 
-struct TestEnv {
-    _postgres: testcontainers_modules::testcontainers::ContainerAsync<Postgres>,
-    db: sea_orm::DatabaseConnection,
-    client: IdentityServiceClient<tonic::transport::Channel>,
-    shutdown: Option<tokio::sync::oneshot::Sender<()>>,
-    server_task: tokio::task::JoinHandle<Result<(), tonic::transport::Error>>,
-}
+#[tokio::test]
+async fn register_user_returns_already_exists_for_duplicate_email()
+-> Result<(), Box<dyn std::error::Error>> {
+    let env = TestEnv::start().await?;
+    let now = chrono::Utc::now();
+    let user_id = Uuid::new_v4();
 
-impl TestEnv {
-    async fn start() -> Result<Self, Box<dyn std::error::Error>> {
-        let postgres = Postgres::default().start().await?;
-        let postgres_host = postgres.get_host().await?;
-        let postgres_port = postgres.get_host_port_ipv4(5432.tcp()).await?;
-        let database_url =
-            format!("postgres://postgres:postgres@{postgres_host}:{postgres_port}/postgres");
+    insert_user_account(
+        &env.db,
+        user_id,
+        "alice@example.com",
+        None,
+        "active",
+        now,
+    )
+    .await?;
 
-        let db = Database::connect(&database_url).await?;
-        Migrator::up(&db, None).await?;
-
-        let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-        let addr = listener.local_addr()?;
-        drop(listener);
-
-        let service =
-            IdentityServer::new(db.clone(), AuthKeys::from_shared_secret(b"test-secret-key"));
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-
-        let server_task = tokio::spawn(async move {
-            Server::builder()
-                .add_service(service.into_server())
-                .serve_with_shutdown(addr, async {
-                    let _ = shutdown_rx.await;
-                })
-                .await
-        });
-
-        let client = connect_client(addr).await?;
-
-        Ok(Self {
-            _postgres: postgres,
-            db,
-            client,
-            shutdown: Some(shutdown_tx),
-            server_task,
+    let error = env
+        .client
+        .clone()
+        .register_user(RegisterUserRequest {
+            email: "ALICE@example.com".to_string(),
+            password: "plain-password".to_string(),
+            username: "alice2".to_string(),
+            display_name: "Alice Two".to_string(),
+            avatar_url: None,
         })
-    }
+        .await
+        .expect_err("duplicate email should be rejected");
 
-    async fn shutdown(mut self) {
-        if let Some(sender) = self.shutdown.take() {
-            let _ = sender.send(());
-        }
+    assert_eq!(error.code(), tonic::Code::AlreadyExists);
+    assert_eq!(error.message(), "A user with this email already exists");
 
-        let _ = self.server_task.await;
-    }
+    env.shutdown().await;
+    Ok(())
 }
 
-async fn connect_client(
-    addr: std::net::SocketAddr,
-) -> Result<IdentityServiceClient<tonic::transport::Channel>, Box<dyn std::error::Error>> {
-    let endpoint = format!("http://{addr}");
+#[tokio::test]
+async fn register_user_returns_already_exists_for_duplicate_username_constraint()
+-> Result<(), Box<dyn std::error::Error>> {
+    let env = TestEnv::start().await?;
+    let now = chrono::Utc::now();
+    let existing_user_id = Uuid::new_v4();
 
-    for _ in 0..20 {
-        match IdentityServiceClient::connect(endpoint.clone()).await {
-            Ok(client) => return Ok(client),
-            Err(_) => tokio::time::sleep(std::time::Duration::from_millis(50)).await,
-        }
-    }
+    insert_user_account(
+        &env.db,
+        existing_user_id,
+        "existing@example.com",
+        None,
+        "active",
+        now,
+    )
+    .await?;
+    insert_user_profile(
+        &env.db,
+        existing_user_id,
+        "alice",
+        "Existing Alice",
+        None,
+        now,
+    )
+    .await?;
 
-    Ok(IdentityServiceClient::connect(endpoint).await?)
+    let error = env
+        .client
+        .clone()
+        .register_user(RegisterUserRequest {
+            email: "new@example.com".to_string(),
+            password: "plain-password".to_string(),
+            username: "alice".to_string(),
+            display_name: "Alice Two".to_string(),
+            avatar_url: None,
+        })
+        .await
+        .expect_err("duplicate username should be rejected");
+
+    assert_eq!(error.code(), tonic::Code::AlreadyExists);
+    assert_eq!(error.message(), "email or username already exists");
+
+    let accounts = user_account::Entity::find().all(&env.db).await?;
+    assert_eq!(accounts.len(), 1);
+
+    env.shutdown().await;
+    Ok(())
 }

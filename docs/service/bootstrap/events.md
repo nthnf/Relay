@@ -28,9 +28,9 @@ Bootstrap should not publish domain-write events in v1. It is read-only aggregat
 - Bootstrap consumes events from RabbitMQ and updates only local Postgres projections.
 - Handlers must be idempotent because replay and duplicate delivery are expected.
 - Bootstrap keeps only pending-request count in v1, not full pending-request row projection.
-- `WorkspaceMemberRemoved` deletes member-scoped workspace, channel, DM-unread, and unread-counter rows for removed user when applicable.
-- `ConversationCreated` denormalizes `conversation_id` into existing workspace-channel rows and DM rows; bootstrap does not expose separate lookup RPC in v1.
-- `DmPairCreated` can seed or repair DM-pair participant mapping used by `dm_projection`.
+- `WorkspaceMemberRemoved` deletes member-scoped workspace, channel, and DM rows for removed user when applicable.
+- `DmPairCreated` seeds or repairs two participant-scoped `dm_projection` rows, one for each user in the pair.
+- `ConversationCreated` denormalizes `conversation_id` into existing workspace-channel rows and existing DM rows; bootstrap does not expose separate lookup RPC in v1.
 - `MessageCreated` uses message payload plus local member-scoped workspace/channel and DM projections to determine which rows receive unread and preview updates.
 - `ConversationReadCursorUpdated` is authoritative reset/input for unread projection repair; bootstrap does not own read cursor writes.
 - `MessageEdited` and `MessageDeleted` only affect bootstrap rows when changed message is still row's current preview anchor.

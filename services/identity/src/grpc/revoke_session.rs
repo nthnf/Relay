@@ -104,3 +104,32 @@ impl Handler {
         Ok(response)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::AuthKeys;
+    use sea_orm::{DbBackend, MockDatabase};
+    use tonic::Request;
+
+    fn test_service() -> Handler {
+        Handler {
+            connection: MockDatabase::new(DbBackend::Postgres).into_connection(),
+            auth: AuthKeys::from_shared_secret(b"test-secret-key"),
+        }
+    }
+
+    #[tokio::test]
+    async fn revoke_session_rejects_invalid_session_id() {
+        let error = test_service()
+            .revoke_session(Request::new(relay_proto::identity::RevokeSessionRequest {
+                session_id: "not-a-uuid".to_string(),
+                revoke_reason: None,
+            }))
+            .await
+            .expect_err("invalid session id should fail");
+
+        assert_eq!(error.code(), tonic::Code::InvalidArgument);
+        assert_eq!(error.message(), "invalid session_id");
+    }
+}

@@ -17,11 +17,15 @@ impl Handler {
         let request = request.into_inner();
         let headers = request.get_client_headers().cloned().unwrap_or_default();
 
-        let Some(access_token) = headers.get("authorization").and_then(|value| {
-            value
-                .strip_prefix("Bearer ")
-                .or_else(|| value.strip_prefix("bearer "))
-        }) else {
+        let access_token = headers.iter().find_map(|(key, value)| {
+            key.eq_ignore_ascii_case("authorization").then(|| {
+                value
+                    .strip_prefix("Bearer ")
+                    .or_else(|| value.strip_prefix("bearer "))
+            })
+        }).flatten();
+
+        let Some(access_token) = access_token else {
             return Ok(Response::new(deny("missing bearer token")));
         };
 
@@ -64,6 +68,12 @@ impl Handler {
             return Ok(Response::new(deny("session revoked")));
         }
 
+        let access_token_expires_at = chrono::Utc::now()
+            + chrono::Duration::from_std(ACCESS_TOKEN_VALIDITY).map_err(|e| {
+                tracing::error!(error = %e, "access token validity conversion failed");
+                tonic::Status::internal("internal server error")
+            })?;
+
         let mut ok_response = OkHttpResponseBuilder::new();
         ok_response
             .add_header("x-user-id", user.user_id.to_string(), None, false)
@@ -76,10 +86,7 @@ impl Handler {
             )
             .add_header(
                 "x-access-token-expires-at",
-                (chrono::Utc::now()
-                    + chrono::Duration::from_std(ACCESS_TOKEN_VALIDITY)
-                        .expect("access token validity should fit chrono"))
-                .to_rfc3339(),
+                access_token_expires_at.to_rfc3339(),
                 None,
                 false,
             );
@@ -93,4 +100,49 @@ impl Handler {
 
 fn deny(message: &str) -> CheckResponse {
     CheckResponse::with_status(Status::unauthenticated(message))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::AuthKeys;
+    use envoy_types::ext_authz::v3::pb::CheckRequest;
+    use envoy_types::pb::envoy::service::auth::v3::{
+        AttributeContext,
+        attribute_context::{HttpRequest, Request as AuthRequest},
+    };
+    use sea_orm::{DbBackend, MockDatabase};
+    use tonic::Request;
+
+    fn test_service() -> Handler {
+        Handler {
+            connection: MockDatabase::new(DbBackend::Postgres).into_connection(),
+            auth: AuthKeys::from_shared_secret(b"test-secret-key"),
+        }
+    }
+
+    #[tokio::test]
+    async fn check_rejects_missing_bearer_token() {
+        let response = test_service()
+            .check(Request::new(CheckRequest {
+                attributes: Some(AttributeContext {
+                    request: Some(AuthRequest {
+                        http: Some(HttpRequest {
+                            headers: std::collections::HashMap::new(),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+            }))
+            .await
+            .expect("missing token should be handled as a denied response")
+            .into_inner();
+
+        let status = response.status.as_ref().expect("status");
+        assert_eq!(status.code, tonic::Code::Unauthenticated as i32);
+        assert_eq!(status.message, "missing bearer token");
+        assert!(response.http_response.is_none());
+    }
 }

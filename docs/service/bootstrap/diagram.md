@@ -5,7 +5,7 @@ flowchart LR
     Gateway[Envoy Gateway]
     Bootstrap[bootstrap]
     RabbitMQ[RabbitMQ]
-    Projections[(bootstrap projections\nuser_app_projection\nworkspace_projection\nworkspace_channel_projection\ndm_projection\nuser_unread_counter)]
+    Projections[(bootstrap projections\nuser_app_projection\nworkspace_projection\nworkspace_channel_projection\ndm_projection)]
 
     Client -->|HTTP app request| App
     App -->|approved backend gRPC read| Gateway

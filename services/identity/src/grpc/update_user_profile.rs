@@ -109,3 +109,46 @@ impl Handler {
         Ok(response)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::AuthKeys;
+    use sea_orm::{DbBackend, MockDatabase};
+    use tonic::Request;
+    use uuid::Uuid;
+
+    fn update_profile_request(user_id: Option<Uuid>) -> Request<UpdateUserProfileRequest> {
+        let mut request = Request::new(UpdateUserProfileRequest {
+            display_name: "Alice Updated".to_string(),
+            avatar_url: None,
+        });
+
+        if let Some(user_id) = user_id {
+            request.metadata_mut().insert(
+                relay_types::ACTOR_USER_ID_METADATA,
+                user_id.to_string().parse().expect("user id metadata should be valid"),
+            );
+        }
+
+        request
+    }
+
+    fn test_service() -> Handler {
+        Handler {
+            connection: MockDatabase::new(DbBackend::Postgres).into_connection(),
+            auth: AuthKeys::from_shared_secret(b"test-secret-key"),
+        }
+    }
+
+    #[tokio::test]
+    async fn update_user_profile_requires_actor_context() {
+        let error = test_service()
+            .update_user_profile(update_profile_request(None))
+            .await
+            .expect_err("missing actor metadata should fail");
+
+        assert_eq!(error.code(), tonic::Code::Unauthenticated);
+        assert_eq!(error.message(), "missing authenticated actor context");
+    }
+}

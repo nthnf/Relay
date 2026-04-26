@@ -11,6 +11,3 @@ pub mod revoke_session;
 pub mod update_user_profile;
 
 pub use handler::Handler as IdentityServer;
-
-#[cfg(test)]
-mod tests;

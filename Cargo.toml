@@ -8,6 +8,7 @@ members = [
   "crates/relay-telemetry",
   "crates/relay-types",
   "services/bootstrap",
+  "services/bootstrap/migration",
   "services/chat",
   "services/chat/migration",
   "services/email",

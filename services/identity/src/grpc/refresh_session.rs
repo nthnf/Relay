@@ -108,14 +108,17 @@ impl Handler {
                             Status::internal("internal server error")
                         })?;
 
+                    let access_token_expires_at = now + Duration::from_std(ACCESS_TOKEN_VALIDITY)
+                        .map_err(|e| {
+                            error!(error = %e, "access token validity conversion failed");
+                            Status::internal("internal server error")
+                        })?;
+
                     Ok(Response::new(TokenPairResponse {
                         user_id: user.user_id.to_string(),
                         session_id: session_id.to_string(),
                         access_token,
-                        access_token_expires_at: Some(to_timestamp(
-                            now + Duration::from_std(ACCESS_TOKEN_VALIDITY)
-                                .expect("access token validity should fit chrono"),
-                        )),
+                        access_token_expires_at: Some(to_timestamp(access_token_expires_at)),
                         refresh_token,
                         refresh_token_expires_at: Some(to_timestamp(now + Duration::days(7))),
                         email_verified: user.email_verified_at.is_some(),

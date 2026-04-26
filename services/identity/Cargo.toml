@@ -27,4 +27,5 @@ jwt-simple = "0.12.12"
 
 [dev-dependencies]
 migration = { path = "migration", package = "identity-migration" }
+testcontainers = { version = "0.27.2", features = ["host-port-exposure"] }
 testcontainers-modules = { version = "0.15", features = ["postgres"] }
