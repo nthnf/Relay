@@ -48,6 +48,7 @@ The Envoy overlay adds:
 
 - `GatewayClass/relay-envoy-local`
 - `Gateway/relay-gateway` in namespace `relay`
+- protected `bootstrap.local` gRPC route using `identity` as Envoy gRPC ext-auth service
 - public `identity.local` gRPC route
 - protected `chat.local` and `workspace.local` gRPC routes using `identity` as Envoy gRPC ext-auth service
 - protected `realtime.local` WebSocket route for `/ws` using the same ext-auth service

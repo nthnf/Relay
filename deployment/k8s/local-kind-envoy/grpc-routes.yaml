@@ -1,6 +1,25 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: GRPCRoute
 metadata:
+  name: bootstrap-grpc
+  namespace: relay
+  labels:
+    app.kubernetes.io/name: bootstrap
+    app.kubernetes.io/part-of: relay
+spec:
+  parentRefs:
+    - name: relay-gateway
+      sectionName: grpc
+  hostnames:
+    - bootstrap.local
+  rules:
+    - backendRefs:
+        - name: bootstrap
+          port: 50051
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
   name: identity-grpc
   namespace: relay
   labels:

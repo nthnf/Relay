@@ -1,0 +1,32 @@
+import { getBootstrapClient, metadataFromRequest } from '$lib/grpc/client.server';
+import { encodeRouteId } from '$lib/server/route-ids';
+
+import type { LayoutServerLoad } from './$types';
+
+export const load: LayoutServerLoad = async ({ request, cookies, url }) => {
+	if (url.pathname.startsWith('/auth/')) {
+		return { sidebar: null };
+	}
+
+	try {
+		const metadata = metadataFromRequest(request.headers, cookies);
+		const [app, dms] = await Promise.all([
+			getBootstrapClient().getAppBootstrap({}, { metadata }),
+			getBootstrapClient().getDmBootstrap({}, { metadata })
+		]);
+
+		return {
+			sidebar: {
+				viewer: app.viewer,
+				workspaces: app.workspaces.map((workspace) => ({
+					...workspace,
+					routeId: encodeRouteId(workspace.workspaceId)
+				})),
+				dms: dms.items.map((dm) => ({ ...dm, routeId: encodeRouteId(dm.dmPairId) })),
+				pendingFriendRequestCount: app.pendingFriendRequestCount
+			}
+		};
+	} catch {
+		return { sidebar: null };
+	}
+};

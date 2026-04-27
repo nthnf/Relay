@@ -27,6 +27,7 @@ kubectl -n relay wait --timeout=5m gateway/relay-gateway --for=condition=Accepte
 
 The overlay creates:
 
+- `bootstrap.local` protected gRPC route using `identity` as gRPC ext-auth.
 - `identity.local` public gRPC route.
 - `chat.local` protected gRPC route using `identity` as gRPC ext-auth.
 - `workspace.local` protected gRPC route using `identity` as gRPC ext-auth.
