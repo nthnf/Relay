@@ -1,0 +1,5 @@
+target
+.git
+.env
+deployment/local
+deployment/k8s

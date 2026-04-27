@@ -1,0 +1,103 @@
+# Local Kubernetes on kind
+
+Local stack uses separate images and separate Postgres 18 Alpine instances per DB-owning service. RabbitMQ uses `rabbitmq:4.3-management-alpine`. Redis uses `redis:8.6-alpine`.
+
+Application and worker images use Debian Bookworm. Alpine was avoided for Rust binaries because the current dependency graph needs `bindgen`/`libclang`, which does not work cleanly with the Alpine/musl toolchain here.
+
+## Build Images
+
+Run from repo root:
+
+```sh
+docker build -f services/identity/Dockerfile -t relay/identity:local .
+docker build -f services/bootstrap/Dockerfile -t relay/bootstrap:local .
+docker build -f services/chat/Dockerfile -t relay/chat:local .
+docker build -f services/email/Dockerfile -t relay/email:local .
+docker build -f services/friendship/Dockerfile -t relay/friendship:local .
+docker build -f services/workspace/Dockerfile -t relay/workspace:local .
+docker build -f services/realtime/Dockerfile -t relay/realtime:local .
+docker build -f workers/outbox/Dockerfile -t relay/outbox:local .
+```
+
+## Create kind Cluster
+
+```sh
+kind create cluster --config deployment/k8s/local-kind/kind-config.yaml
+kind load docker-image relay/identity:local --name relay
+kind load docker-image relay/bootstrap:local --name relay
+kind load docker-image relay/chat:local --name relay
+kind load docker-image relay/email:local --name relay
+kind load docker-image relay/friendship:local --name relay
+kind load docker-image relay/workspace:local --name relay
+kind load docker-image relay/realtime:local --name relay
+kind load docker-image relay/outbox:local --name relay
+kubectl apply -k deployment/k8s/local-kind
+```
+
+## Optional Envoy Gateway Overlay
+
+Install Envoy Gateway first. This repository expects the latest stable Envoy Gateway chart tested for this overlay, currently `1.7.2`:
+
+```sh
+helm install eg oci://docker.io/envoyproxy/gateway-helm --version 1.7.2 -n envoy-gateway-system --create-namespace
+kubectl wait --timeout=5m -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
+kubectl apply -k deployment/k8s/local-kind-envoy
+```
+
+The Envoy overlay adds:
+
+- `GatewayClass/relay-envoy-local`
+- `Gateway/relay-gateway` in namespace `relay`
+- public `identity.local` gRPC route
+- protected `chat.local` and `workspace.local` gRPC routes using `identity` as Envoy gRPC ext-auth service
+- protected `realtime.local` WebSocket route for `/ws` using the same ext-auth service
+
+For local testing, port-forward the managed Envoy data-plane Service instead of exposing another kind host port. The E2E script discovers and forwards this service automatically. In kind, `Gateway/relay-gateway` can remain top-level `Programmed=False` when no LoadBalancer address is assigned; the data-plane Service is still usable through port-forward once the Gateway is `Accepted=True`.
+
+```sh
+./e2e/chat-envoy.sh
+```
+
+The script registers users through Envoy, redeems verification tokens, creates a protected chat DM through Envoy, opens Bob's realtime WebSocket through Envoy, sends Alice's message, and verifies Bob receives `message_created`.
+
+## Optional Local LoadBalancer Support
+
+Cloud clusters usually assign `EXTERNAL-IP` values for `type: LoadBalancer` Services. kind does not, so use MetalLB when you want local behavior closer to production:
+
+```sh
+helm repo add metallb https://metallb.github.io/metallb
+helm repo update metallb
+helm install metallb metallb/metallb --version 0.15.3 -n metallb-system --create-namespace
+kubectl wait --timeout=5m -n metallb-system deployment/metallb-controller --for=condition=Available
+kubectl wait --timeout=5m -n metallb-system daemonset/metallb-speaker --for=jsonpath='{.status.numberReady}'=1
+kubectl apply -k deployment/k8s/local-kind-metallb
+```
+
+The local pool is based on the current kind Docker network range: `172.19.255.200-172.19.255.250`. If your kind network subnet changes, update `deployment/k8s/local-kind-metallb/pool.yaml` before applying.
+
+With MetalLB installed, `./e2e/chat-envoy.sh` automatically uses the Envoy `LoadBalancer` external IP. Set `USE_LOADBALANCER=always` to require it or `USE_LOADBALANCER=never` to force port-forward mode.
+
+## Env Var Injection
+
+Best fit here: `ConfigMap` for non-secret shared settings, `Secret` for credentials and connection strings, `envFrom` for groups that map directly to process env vars. Use explicit `env` entries when one deployment needs one override like `BIND_ADDR` or `OUTBOX_PUBLISHER_SERVICE`.
+
+Do not put real credentials in Git. For local only, current `stringData` secrets are dev defaults. For real clusters, create secrets out of band:
+
+```sh
+kubectl create secret generic relay-runtime-secret \
+  --namespace relay \
+  --from-literal=TOKEN_SECRET='replace-me' \
+  --from-literal=SMTP_URL='smtp://user:pass@smtp.example:587'
+```
+
+For generated environments, prefer Kustomize overlays or External Secrets. Keep service-specific `DATABASE_URL` in per-service secrets because each service owns its Postgres boundary.
+
+## Notes
+
+Postgres 18 images expect persistent volumes mounted at `/var/lib/postgresql`, not `/var/lib/postgresql/data`.
+
+RabbitMQ definitions include the local `relay` user. Loading definitions disables default user seeding, so keep users and permissions in `deployment/k8s/local-kind/rabbitmq/definitions.json` when changing local broker credentials.
+
+`chat` runs the gRPC server and AMQP consumers in one process and is exposed through the `chat` Kubernetes `Service` on port `50051`.
+
+Migration `Job`s use migration binaries copied into each service image. If you reapply after completed Jobs already exist, delete old Jobs first or change Job names.

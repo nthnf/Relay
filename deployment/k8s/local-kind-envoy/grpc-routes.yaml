@@ -1,0 +1,56 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: identity-grpc
+  namespace: relay
+  labels:
+    app.kubernetes.io/name: identity
+    app.kubernetes.io/part-of: relay
+spec:
+  parentRefs:
+    - name: relay-gateway
+      sectionName: grpc
+  hostnames:
+    - identity.local
+  rules:
+    - backendRefs:
+        - name: identity
+          port: 50051
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: chat-grpc
+  namespace: relay
+  labels:
+    app.kubernetes.io/name: chat
+    app.kubernetes.io/part-of: relay
+spec:
+  parentRefs:
+    - name: relay-gateway
+      sectionName: grpc
+  hostnames:
+    - chat.local
+  rules:
+    - backendRefs:
+        - name: chat
+          port: 50051
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: workspace-grpc
+  namespace: relay
+  labels:
+    app.kubernetes.io/name: workspace
+    app.kubernetes.io/part-of: relay
+spec:
+  parentRefs:
+    - name: relay-gateway
+      sectionName: grpc
+  hostnames:
+    - workspace.local
+  rules:
+    - backendRefs:
+        - name: workspace
+          port: 50051

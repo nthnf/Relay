@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: relay-runtime-config
+data:
+  AMQP_ADDR: amqp://relay:relay@rabbitmq:5672/%2f
+  OUTBOX_EXCHANGE: relay.events
+  OUTBOX_BATCH_SIZE: "100"
+  OUTBOX_POLL_INTERVAL_SECS: "2"
+  OUTBOX_CLAIM_TTL_SECS: "30"
+  OUTBOX_RETRY_DELAY_SECS: "10"
+  OUTBOX_MAX_PUBLISH_ATTEMPTS: "10"
+  PUBLIC_WEB_BASE_URL: http://localhost:5173
+  SMTP_PROVIDER_NAME: local
+  SENDER_EMAIL: noreply@relay.local
+  SENDER_NAME: Relay Local
+  WORKSPACE_SERVICE_URL: http://workspace:50051
+  REALTIME_SERVICE_URL: http://realtime:50051
+  REDIS_URL: redis://redis:6379/
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: relay-runtime-secret
+type: Opaque
+stringData:
+  TOKEN_SECRET: local-dev-token-secret-change-me
+  SMTP_URL: smtp://mailpit:1025
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: identity-db-secret
+type: Opaque
+stringData:
+  POSTGRES_DB: relay
+  POSTGRES_USER: relay
+  POSTGRES_PASSWORD: relay
+  DATABASE_URL: postgres://relay:relay@identity-postgres:5432/relay
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bootstrap-db-secret
+type: Opaque
+stringData:
+  POSTGRES_DB: relay
+  POSTGRES_USER: relay
+  POSTGRES_PASSWORD: relay
+  DATABASE_URL: postgres://relay:relay@bootstrap-postgres:5432/relay
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: chat-db-secret
+type: Opaque
+stringData:
+  POSTGRES_DB: relay
+  POSTGRES_USER: relay
+  POSTGRES_PASSWORD: relay
+  DATABASE_URL: postgres://relay:relay@chat-postgres:5432/relay
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: email-db-secret
+type: Opaque
+stringData:
+  POSTGRES_DB: relay
+  POSTGRES_USER: relay
+  POSTGRES_PASSWORD: relay
+  DATABASE_URL: postgres://relay:relay@email-postgres:5432/relay
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: friendship-db-secret
+type: Opaque
+stringData:
+  POSTGRES_DB: relay
+  POSTGRES_USER: relay
+  POSTGRES_PASSWORD: relay
+  DATABASE_URL: postgres://relay:relay@friendship-postgres:5432/relay
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: workspace-db-secret
+type: Opaque
+stringData:
+  POSTGRES_DB: relay
+  POSTGRES_USER: relay
+  POSTGRES_PASSWORD: relay
+  DATABASE_URL: postgres://relay:relay@workspace-postgres:5432/relay

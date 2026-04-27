@@ -1,0 +1,56 @@
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: chat-ext-auth
+  namespace: relay
+  labels:
+    app.kubernetes.io/name: chat
+    app.kubernetes.io/part-of: relay
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: GRPCRoute
+      name: chat-grpc
+  extAuth:
+    grpc:
+      backendRefs:
+        - name: identity
+          port: 50051
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: workspace-ext-auth
+  namespace: relay
+  labels:
+    app.kubernetes.io/name: workspace
+    app.kubernetes.io/part-of: relay
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: GRPCRoute
+      name: workspace-grpc
+  extAuth:
+    grpc:
+      backendRefs:
+        - name: identity
+          port: 50051
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: realtime-ext-auth
+  namespace: relay
+  labels:
+    app.kubernetes.io/name: realtime
+    app.kubernetes.io/part-of: relay
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: realtime-websocket
+  extAuth:
+    grpc:
+      backendRefs:
+        - name: identity
+          port: 50051

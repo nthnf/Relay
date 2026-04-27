@@ -1,0 +1,125 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: identity-migration
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-postgres
+          image: postgres:18-alpine
+          command: ["sh", "-c", "until pg_isready -h identity-postgres -U relay; do sleep 2; done"]
+      containers:
+        - name: migration
+          image: relay/identity:local
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/identity-migration", "up"]
+          envFrom:
+            - secretRef:
+                name: identity-db-secret
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bootstrap-migration
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-postgres
+          image: postgres:18-alpine
+          command: ["sh", "-c", "until pg_isready -h bootstrap-postgres -U relay; do sleep 2; done"]
+      containers:
+        - name: migration
+          image: relay/bootstrap:local
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/bootstrap-migration", "up"]
+          envFrom:
+            - secretRef:
+                name: bootstrap-db-secret
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: chat-migration
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-postgres
+          image: postgres:18-alpine
+          command: ["sh", "-c", "until pg_isready -h chat-postgres -U relay; do sleep 2; done"]
+      containers:
+        - name: migration
+          image: relay/chat:local
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/chat-migration", "up"]
+          envFrom:
+            - secretRef:
+                name: chat-db-secret
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: email-migration
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-postgres
+          image: postgres:18-alpine
+          command: ["sh", "-c", "until pg_isready -h email-postgres -U relay; do sleep 2; done"]
+      containers:
+        - name: migration
+          image: relay/email:local
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/email-migration", "up"]
+          envFrom:
+            - secretRef:
+                name: email-db-secret
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: friendship-migration
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-postgres
+          image: postgres:18-alpine
+          command: ["sh", "-c", "until pg_isready -h friendship-postgres -U relay; do sleep 2; done"]
+      containers:
+        - name: migration
+          image: relay/friendship:local
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/friendship-migration", "up"]
+          envFrom:
+            - secretRef:
+                name: friendship-db-secret
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: workspace-migration
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-postgres
+          image: postgres:18-alpine
+          command: ["sh", "-c", "until pg_isready -h workspace-postgres -U relay; do sleep 2; done"]
+      containers:
+        - name: migration
+          image: relay/workspace:local
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/workspace-migration", "up"]
+          envFrom:
+            - secretRef:
+                name: workspace-db-secret

@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identity-outbox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: identity-outbox
+  template:
+    metadata:
+      labels:
+        app: identity-outbox
+    spec:
+      containers:
+        - name: outbox
+          image: relay/outbox:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: OUTBOX_PUBLISHER_SERVICE
+              value: identity
+          envFrom:
+            - configMapRef:
+                name: relay-runtime-config
+            - secretRef:
+                name: identity-db-secret
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: friendship-outbox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: friendship-outbox
+  template:
+    metadata:
+      labels:
+        app: friendship-outbox
+    spec:
+      containers:
+        - name: outbox
+          image: relay/outbox:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: OUTBOX_PUBLISHER_SERVICE
+              value: friendship
+          envFrom:
+            - configMapRef:
+                name: relay-runtime-config
+            - secretRef:
+                name: friendship-db-secret
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace-outbox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: workspace-outbox
+  template:
+    metadata:
+      labels:
+        app: workspace-outbox
+    spec:
+      containers:
+        - name: outbox
+          image: relay/outbox:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: OUTBOX_PUBLISHER_SERVICE
+              value: workspace
+          envFrom:
+            - configMapRef:
+                name: relay-runtime-config
+            - secretRef:
+                name: workspace-db-secret
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-outbox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-outbox
+  template:
+    metadata:
+      labels:
+        app: chat-outbox
+    spec:
+      containers:
+        - name: outbox
+          image: relay/outbox:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: OUTBOX_PUBLISHER_SERVICE
+              value: chat
+          envFrom:
+            - configMapRef:
+                name: relay-runtime-config
+            - secretRef:
+                name: chat-db-secret
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi

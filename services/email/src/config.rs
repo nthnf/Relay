@@ -13,7 +13,7 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Result<Self, Box<dyn Error + Send + Sync>> {
-        dotenvy::dotenv()?;
+        dotenvy::dotenv().ok();
         Ok(Self {
             db_url: std::env::var("DATABASE_URL")?,
             amqp_addr: std::env::var("AMQP_ADDR")?,

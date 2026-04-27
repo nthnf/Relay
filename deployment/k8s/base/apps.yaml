@@ -1,0 +1,335 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identity
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: identity
+  template:
+    metadata:
+      labels:
+        app: identity
+    spec:
+      containers:
+        - name: identity
+          image: relay/identity:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 50051
+          env:
+            - name: BIND_ADDR
+              value: 0.0.0.0:50051
+          envFrom:
+            - configMapRef:
+                name: relay-runtime-config
+            - secretRef:
+                name: relay-runtime-secret
+            - secretRef:
+                name: identity-db-secret
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: identity
+spec:
+  selector:
+    app: identity
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bootstrap
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bootstrap
+  template:
+    metadata:
+      labels:
+        app: bootstrap
+    spec:
+      containers:
+        - name: bootstrap
+          image: relay/bootstrap:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 50051
+          env:
+            - name: BIND_ADDR
+              value: 0.0.0.0:50051
+          envFrom:
+            - configMapRef:
+                name: relay-runtime-config
+            - secretRef:
+                name: bootstrap-db-secret
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bootstrap
+spec:
+  selector:
+    app: bootstrap
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat
+  template:
+    metadata:
+      labels:
+        app: chat
+    spec:
+      containers:
+        - name: chat
+          image: relay/chat:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 50051
+          env:
+            - name: BIND_ADDR
+              value: 0.0.0.0:50051
+          envFrom:
+            - configMapRef:
+                name: relay-runtime-config
+            - secretRef:
+                name: chat-db-secret
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat
+spec:
+  selector:
+    app: chat
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: email
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: email
+  template:
+    metadata:
+      labels:
+        app: email
+    spec:
+      containers:
+        - name: email
+          image: relay/email:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: relay-runtime-config
+            - secretRef:
+                name: relay-runtime-secret
+            - secretRef:
+                name: email-db-secret
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: friendship
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: friendship
+  template:
+    metadata:
+      labels:
+        app: friendship
+    spec:
+      containers:
+        - name: friendship
+          image: relay/friendship:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 50051
+          env:
+            - name: BIND_ADDR
+              value: 0.0.0.0:50051
+          envFrom:
+            - configMapRef:
+                name: relay-runtime-config
+            - secretRef:
+                name: friendship-db-secret
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: friendship
+spec:
+  selector:
+    app: friendship
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: workspace
+  template:
+    metadata:
+      labels:
+        app: workspace
+    spec:
+      containers:
+        - name: workspace
+          image: relay/workspace:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 50051
+          env:
+            - name: BIND_ADDR
+              value: 0.0.0.0:50051
+          envFrom:
+            - configMapRef:
+                name: relay-runtime-config
+            - secretRef:
+                name: workspace-db-secret
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workspace
+spec:
+  selector:
+    app: workspace
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: realtime
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: realtime
+  template:
+    metadata:
+      labels:
+        app: realtime
+    spec:
+      containers:
+        - name: realtime
+          image: relay/realtime:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 50051
+            - name: websocket
+              containerPort: 8080
+          env:
+            - name: GRPC_BIND_ADDR
+              value: 0.0.0.0:50051
+            - name: WS_BIND_ADDR
+              value: 0.0.0.0:8080
+          envFrom:
+            - configMapRef:
+                name: relay-runtime-config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: realtime
+spec:
+  type: NodePort
+  selector:
+    app: realtime
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+    - name: websocket
+      port: 8080
+      targetPort: websocket
+      nodePort: 30080
