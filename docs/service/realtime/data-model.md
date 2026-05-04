@@ -62,13 +62,14 @@ Current user presence summary.
 | `user_id` | `uuid` | Identity-owned user reference and key suffix. |
 | `presence` | `text` | Contract values: `online`, `offline`. |
 | `last_seen_at` | `timestamp` | Last server-observed activity or disconnect time. |
-| `session_count` | `int` | Count of currently connected realtime sessions for the user. |
+| `session_count` | `int` | Internal count of currently connected realtime sessions for deriving online/offline state; not exposed by the read API. |
 | `updated_at` | `timestamp` | Last presence-state write time. |
 
 Semantic rules:
 
 - A user is `online` when `session_count > 0`.
 - A user is `offline` when `session_count = 0`.
+- External callers receive only a boolean online/offline summary, not the internal count.
 - `last_seen_at` advances on heartbeat, message-acknowledged activity, or disconnect handling, whichever realtime observes last.
 - Presence is user-scoped, not workspace-scoped, in v1.
 - Redis key owner is `realtime`; no other service writes these keys directly.

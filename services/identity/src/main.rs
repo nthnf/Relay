@@ -8,8 +8,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auth = AuthKeys::from_shared_secret(config.token_secret.as_bytes());
     let service = IdentityServer::new(db, auth);
     let auth_service = service.clone();
+    let (_, health_service) = tonic_health::server::health_reporter();
 
     Server::builder()
+        .add_service(health_service)
         .add_service(service.into_server())
         .add_service(auth_service.into_auth_server())
         .serve(config.bind_addr)

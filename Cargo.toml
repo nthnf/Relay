@@ -36,6 +36,7 @@ sea-orm-migration = { version = "2.0.0-rc.38", features = [
   "runtime-tokio-rustls",
 ] }
 tonic = "0.14.5"
+tonic-health = "0.14.2"
 tonic-prost = "0.14.5"
 tonic-prost-build = "0.14.5"
 async-trait = "0.1.89"

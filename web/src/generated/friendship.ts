@@ -11,16 +11,25 @@ import { Timestamp } from "./google/protobuf/timestamp";
 
 export const protobufPackage = "relay.friendship";
 
+export interface UserSummary {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl?: string | undefined;
+}
+
 export interface FriendRequestRecord {
   friendRequestId: string;
   requesterUserId: string;
   addresseeUserId: string;
   status: string;
   createdAt: Date | undefined;
+  requester: UserSummary | undefined;
+  addressee: UserSummary | undefined;
 }
 
 export interface CreateFriendRequestRequest {
-  targetUserId: string;
+  targetUsername: string;
 }
 
 export interface AcceptFriendRequestRequest {
@@ -98,8 +107,152 @@ export interface ListPendingRequestsResponse {
   nextPageToken?: string | undefined;
 }
 
+export interface ListBlockedUsersRequest {
+  pageSize?: number | undefined;
+  pageToken?: string | undefined;
+}
+
+export interface BlockedUserSummary {
+  targetUserId: string;
+  blockedAt: Date | undefined;
+  target: UserSummary | undefined;
+}
+
+export interface ListBlockedUsersResponse {
+  blockedUsers: BlockedUserSummary[];
+  nextPageToken?: string | undefined;
+}
+
+function createBaseUserSummary(): UserSummary {
+  return { userId: "", username: "", displayName: "", avatarUrl: undefined };
+}
+
+export const UserSummary: MessageFns<UserSummary> = {
+  encode(message: UserSummary, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.userId !== "") {
+      writer.uint32(10).string(message.userId);
+    }
+    if (message.username !== "") {
+      writer.uint32(18).string(message.username);
+    }
+    if (message.displayName !== "") {
+      writer.uint32(26).string(message.displayName);
+    }
+    if (message.avatarUrl !== undefined) {
+      writer.uint32(34).string(message.avatarUrl);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): UserSummary {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseUserSummary();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.userId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.username = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.displayName = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.avatarUrl = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): UserSummary {
+    return {
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+      username: isSet(object.username) ? globalThis.String(object.username) : "",
+      displayName: isSet(object.displayName)
+        ? globalThis.String(object.displayName)
+        : isSet(object.display_name)
+        ? globalThis.String(object.display_name)
+        : "",
+      avatarUrl: isSet(object.avatarUrl)
+        ? globalThis.String(object.avatarUrl)
+        : isSet(object.avatar_url)
+        ? globalThis.String(object.avatar_url)
+        : undefined,
+    };
+  },
+
+  toJSON(message: UserSummary): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.username !== "") {
+      obj.username = message.username;
+    }
+    if (message.displayName !== "") {
+      obj.displayName = message.displayName;
+    }
+    if (message.avatarUrl !== undefined) {
+      obj.avatarUrl = message.avatarUrl;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<UserSummary>): UserSummary {
+    return UserSummary.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<UserSummary>): UserSummary {
+    const message = createBaseUserSummary();
+    message.userId = object.userId ?? "";
+    message.username = object.username ?? "";
+    message.displayName = object.displayName ?? "";
+    message.avatarUrl = object.avatarUrl ?? undefined;
+    return message;
+  },
+};
+
 function createBaseFriendRequestRecord(): FriendRequestRecord {
-  return { friendRequestId: "", requesterUserId: "", addresseeUserId: "", status: "", createdAt: undefined };
+  return {
+    friendRequestId: "",
+    requesterUserId: "",
+    addresseeUserId: "",
+    status: "",
+    createdAt: undefined,
+    requester: undefined,
+    addressee: undefined,
+  };
 }
 
 export const FriendRequestRecord: MessageFns<FriendRequestRecord> = {
@@ -118,6 +271,12 @@ export const FriendRequestRecord: MessageFns<FriendRequestRecord> = {
     }
     if (message.createdAt !== undefined) {
       Timestamp.encode(toTimestamp(message.createdAt), writer.uint32(42).fork()).join();
+    }
+    if (message.requester !== undefined) {
+      UserSummary.encode(message.requester, writer.uint32(50).fork()).join();
+    }
+    if (message.addressee !== undefined) {
+      UserSummary.encode(message.addressee, writer.uint32(58).fork()).join();
     }
     return writer;
   },
@@ -169,6 +328,22 @@ export const FriendRequestRecord: MessageFns<FriendRequestRecord> = {
           message.createdAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
           continue;
         }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.requester = UserSummary.decode(reader, reader.uint32());
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.addressee = UserSummary.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -201,6 +376,8 @@ export const FriendRequestRecord: MessageFns<FriendRequestRecord> = {
         : isSet(object.created_at)
         ? fromJsonTimestamp(object.created_at)
         : undefined,
+      requester: isSet(object.requester) ? UserSummary.fromJSON(object.requester) : undefined,
+      addressee: isSet(object.addressee) ? UserSummary.fromJSON(object.addressee) : undefined,
     };
   },
 
@@ -221,6 +398,12 @@ export const FriendRequestRecord: MessageFns<FriendRequestRecord> = {
     if (message.createdAt !== undefined) {
       obj.createdAt = message.createdAt.toISOString();
     }
+    if (message.requester !== undefined) {
+      obj.requester = UserSummary.toJSON(message.requester);
+    }
+    if (message.addressee !== undefined) {
+      obj.addressee = UserSummary.toJSON(message.addressee);
+    }
     return obj;
   },
 
@@ -234,18 +417,24 @@ export const FriendRequestRecord: MessageFns<FriendRequestRecord> = {
     message.addresseeUserId = object.addresseeUserId ?? "";
     message.status = object.status ?? "";
     message.createdAt = object.createdAt ?? undefined;
+    message.requester = (object.requester !== undefined && object.requester !== null)
+      ? UserSummary.fromPartial(object.requester)
+      : undefined;
+    message.addressee = (object.addressee !== undefined && object.addressee !== null)
+      ? UserSummary.fromPartial(object.addressee)
+      : undefined;
     return message;
   },
 };
 
 function createBaseCreateFriendRequestRequest(): CreateFriendRequestRequest {
-  return { targetUserId: "" };
+  return { targetUsername: "" };
 }
 
 export const CreateFriendRequestRequest: MessageFns<CreateFriendRequestRequest> = {
   encode(message: CreateFriendRequestRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.targetUserId !== "") {
-      writer.uint32(10).string(message.targetUserId);
+    if (message.targetUsername !== "") {
+      writer.uint32(10).string(message.targetUsername);
     }
     return writer;
   },
@@ -262,7 +451,7 @@ export const CreateFriendRequestRequest: MessageFns<CreateFriendRequestRequest> 
             break;
           }
 
-          message.targetUserId = reader.string();
+          message.targetUsername = reader.string();
           continue;
         }
       }
@@ -276,18 +465,18 @@ export const CreateFriendRequestRequest: MessageFns<CreateFriendRequestRequest> 
 
   fromJSON(object: any): CreateFriendRequestRequest {
     return {
-      targetUserId: isSet(object.targetUserId)
-        ? globalThis.String(object.targetUserId)
-        : isSet(object.target_user_id)
-        ? globalThis.String(object.target_user_id)
+      targetUsername: isSet(object.targetUsername)
+        ? globalThis.String(object.targetUsername)
+        : isSet(object.target_username)
+        ? globalThis.String(object.target_username)
         : "",
     };
   },
 
   toJSON(message: CreateFriendRequestRequest): unknown {
     const obj: any = {};
-    if (message.targetUserId !== "") {
-      obj.targetUserId = message.targetUserId;
+    if (message.targetUsername !== "") {
+      obj.targetUsername = message.targetUsername;
     }
     return obj;
   },
@@ -297,7 +486,7 @@ export const CreateFriendRequestRequest: MessageFns<CreateFriendRequestRequest> 
   },
   fromPartial(object: DeepPartial<CreateFriendRequestRequest>): CreateFriendRequestRequest {
     const message = createBaseCreateFriendRequestRequest();
-    message.targetUserId = object.targetUserId ?? "";
+    message.targetUsername = object.targetUsername ?? "";
     return message;
   },
 };
@@ -1538,6 +1727,276 @@ export const ListPendingRequestsResponse: MessageFns<ListPendingRequestsResponse
   },
 };
 
+function createBaseListBlockedUsersRequest(): ListBlockedUsersRequest {
+  return { pageSize: undefined, pageToken: undefined };
+}
+
+export const ListBlockedUsersRequest: MessageFns<ListBlockedUsersRequest> = {
+  encode(message: ListBlockedUsersRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.pageSize !== undefined) {
+      writer.uint32(8).int32(message.pageSize);
+    }
+    if (message.pageToken !== undefined) {
+      writer.uint32(18).string(message.pageToken);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ListBlockedUsersRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseListBlockedUsersRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.pageSize = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pageToken = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ListBlockedUsersRequest {
+    return {
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : undefined,
+      pageToken: isSet(object.pageToken)
+        ? globalThis.String(object.pageToken)
+        : isSet(object.page_token)
+        ? globalThis.String(object.page_token)
+        : undefined,
+    };
+  },
+
+  toJSON(message: ListBlockedUsersRequest): unknown {
+    const obj: any = {};
+    if (message.pageSize !== undefined) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    if (message.pageToken !== undefined) {
+      obj.pageToken = message.pageToken;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ListBlockedUsersRequest>): ListBlockedUsersRequest {
+    return ListBlockedUsersRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ListBlockedUsersRequest>): ListBlockedUsersRequest {
+    const message = createBaseListBlockedUsersRequest();
+    message.pageSize = object.pageSize ?? undefined;
+    message.pageToken = object.pageToken ?? undefined;
+    return message;
+  },
+};
+
+function createBaseBlockedUserSummary(): BlockedUserSummary {
+  return { targetUserId: "", blockedAt: undefined, target: undefined };
+}
+
+export const BlockedUserSummary: MessageFns<BlockedUserSummary> = {
+  encode(message: BlockedUserSummary, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.targetUserId !== "") {
+      writer.uint32(10).string(message.targetUserId);
+    }
+    if (message.blockedAt !== undefined) {
+      Timestamp.encode(toTimestamp(message.blockedAt), writer.uint32(18).fork()).join();
+    }
+    if (message.target !== undefined) {
+      UserSummary.encode(message.target, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlockedUserSummary {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBlockedUserSummary();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.targetUserId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.blockedAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.target = UserSummary.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): BlockedUserSummary {
+    return {
+      targetUserId: isSet(object.targetUserId)
+        ? globalThis.String(object.targetUserId)
+        : isSet(object.target_user_id)
+        ? globalThis.String(object.target_user_id)
+        : "",
+      blockedAt: isSet(object.blockedAt)
+        ? fromJsonTimestamp(object.blockedAt)
+        : isSet(object.blocked_at)
+        ? fromJsonTimestamp(object.blocked_at)
+        : undefined,
+      target: isSet(object.target) ? UserSummary.fromJSON(object.target) : undefined,
+    };
+  },
+
+  toJSON(message: BlockedUserSummary): unknown {
+    const obj: any = {};
+    if (message.targetUserId !== "") {
+      obj.targetUserId = message.targetUserId;
+    }
+    if (message.blockedAt !== undefined) {
+      obj.blockedAt = message.blockedAt.toISOString();
+    }
+    if (message.target !== undefined) {
+      obj.target = UserSummary.toJSON(message.target);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<BlockedUserSummary>): BlockedUserSummary {
+    return BlockedUserSummary.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<BlockedUserSummary>): BlockedUserSummary {
+    const message = createBaseBlockedUserSummary();
+    message.targetUserId = object.targetUserId ?? "";
+    message.blockedAt = object.blockedAt ?? undefined;
+    message.target = (object.target !== undefined && object.target !== null)
+      ? UserSummary.fromPartial(object.target)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseListBlockedUsersResponse(): ListBlockedUsersResponse {
+  return { blockedUsers: [], nextPageToken: undefined };
+}
+
+export const ListBlockedUsersResponse: MessageFns<ListBlockedUsersResponse> = {
+  encode(message: ListBlockedUsersResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.blockedUsers) {
+      BlockedUserSummary.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.nextPageToken !== undefined) {
+      writer.uint32(18).string(message.nextPageToken);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ListBlockedUsersResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseListBlockedUsersResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.blockedUsers.push(BlockedUserSummary.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.nextPageToken = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ListBlockedUsersResponse {
+    return {
+      blockedUsers: globalThis.Array.isArray(object?.blockedUsers)
+        ? object.blockedUsers.map((e: any) => BlockedUserSummary.fromJSON(e))
+        : globalThis.Array.isArray(object?.blocked_users)
+        ? object.blocked_users.map((e: any) => BlockedUserSummary.fromJSON(e))
+        : [],
+      nextPageToken: isSet(object.nextPageToken)
+        ? globalThis.String(object.nextPageToken)
+        : isSet(object.next_page_token)
+        ? globalThis.String(object.next_page_token)
+        : undefined,
+    };
+  },
+
+  toJSON(message: ListBlockedUsersResponse): unknown {
+    const obj: any = {};
+    if (message.blockedUsers?.length) {
+      obj.blockedUsers = message.blockedUsers.map((e) => BlockedUserSummary.toJSON(e));
+    }
+    if (message.nextPageToken !== undefined) {
+      obj.nextPageToken = message.nextPageToken;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ListBlockedUsersResponse>): ListBlockedUsersResponse {
+    return ListBlockedUsersResponse.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ListBlockedUsersResponse>): ListBlockedUsersResponse {
+    const message = createBaseListBlockedUsersResponse();
+    message.blockedUsers = object.blockedUsers?.map((e) => BlockedUserSummary.fromPartial(e)) || [];
+    message.nextPageToken = object.nextPageToken ?? undefined;
+    return message;
+  },
+};
+
 export type FriendshipServiceDefinition = typeof FriendshipServiceDefinition;
 export const FriendshipServiceDefinition = {
   name: "FriendshipService",
@@ -1607,6 +2066,14 @@ export const FriendshipServiceDefinition = {
       responseStream: false,
       options: {},
     },
+    listBlockedUsers: {
+      name: "ListBlockedUsers",
+      requestType: ListBlockedUsersRequest as typeof ListBlockedUsersRequest,
+      requestStream: false,
+      responseType: ListBlockedUsersResponse as typeof ListBlockedUsersResponse,
+      responseStream: false,
+      options: {},
+    },
   },
 } as const;
 
@@ -1640,6 +2107,10 @@ export interface FriendshipServiceImplementation<CallContextExt = {}> {
     request: ListPendingRequestsRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<ListPendingRequestsResponse>>;
+  listBlockedUsers(
+    request: ListBlockedUsersRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<ListBlockedUsersResponse>>;
 }
 
 export interface FriendshipServiceClient<CallOptionsExt = {}> {
@@ -1672,6 +2143,10 @@ export interface FriendshipServiceClient<CallOptionsExt = {}> {
     request: DeepPartial<ListPendingRequestsRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<ListPendingRequestsResponse>;
+  listBlockedUsers(
+    request: DeepPartial<ListBlockedUsersRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<ListBlockedUsersResponse>;
 }
 
 type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;

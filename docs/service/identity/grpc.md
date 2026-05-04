@@ -26,7 +26,7 @@ Identity exposes synchronous account, refresh-session, and profile-basic contrac
 
 - `email` (`string`)
 - `password` (`string`) - plaintext password input; identity hashes it server-side with Argon2id before persistence.
-- `username` (`string`)
+- `username` (`string`) - base username; must not contain `#`. Identity appends a server-generated four-digit discriminator before persistence and response/event publication.
 - `display_name` (`string`)
 - `avatar_url` (`string optional`)
 
@@ -39,6 +39,8 @@ Identity exposes synchronous account, refresh-session, and profile-basic contrac
 **Contract notes**
 
 - Reject duplicate `email_normalized` with an already-exists domain error.
+- Reject `username` values containing `#`; users cannot choose their discriminator in v1.
+- Generate a random four-digit discriminator server-side and persist `user_profile.username` as `username#dddd`.
 - Hash the submitted plaintext password server-side with Argon2id before writing `user_credential_password.password_hash`.
 - Create `user_account`, `user_profile`, `user_credential_password`, initial `email_verification_token`, and the `UserRegistered` plus `VerificationEmailRequested` outbox rows in one local transaction.
 - Do not create a `user_session` during registration.

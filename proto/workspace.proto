@@ -11,6 +11,7 @@ service WorkspaceService {
   rpc AuthorizeChannelAction(AuthorizeChannelActionRequest) returns (AuthorizeChannelActionResponse);
   rpc CreateChannel(CreateChannelRequest) returns (CreateChannelResponse);
   rpc ListChannels(ListChannelsRequest) returns (ListChannelsResponse);
+  rpc ListWorkspaceMembers(ListWorkspaceMembersRequest) returns (ListWorkspaceMembersResponse);
   rpc AddMember(AddMemberRequest) returns (AddMemberResponse);
   rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
   rpc IssueInvitation(IssueInvitationRequest) returns (IssueInvitationResponse);
@@ -120,6 +121,26 @@ message ChannelSummary {
 
 message ListChannelsResponse {
   repeated ChannelSummary channels = 1;
+}
+
+message WorkspaceMemberSummary {
+  string user_id = 1;
+  string username = 2;
+  string display_name = 3;
+  optional string avatar_url = 4;
+  google.protobuf.Timestamp joined_at = 5;
+  optional string added_by_user_id = 6;
+}
+
+message ListWorkspaceMembersRequest {
+  string workspace_id = 1;
+  optional int32 page_size = 2;
+  optional string page_token = 3;
+}
+
+message ListWorkspaceMembersResponse {
+  repeated WorkspaceMemberSummary members = 1;
+  optional string next_page_token = 2;
 }
 
 message AddMemberRequest {

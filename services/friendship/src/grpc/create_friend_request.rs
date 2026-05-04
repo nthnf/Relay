@@ -6,12 +6,12 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::{
-    entity::{friend_request, friendship_edge, outbox_event, user_block},
+    entity::{friend_request, friendship_edge, outbox_event, user_block, user_snapshot},
     events::FriendRequestCreatedPayload,
 };
 
 use super::handler::Handler;
-use super::lib::user_account_exists;
+use super::lib::user_summary;
 use relay_types::{actor_user_id, payload_value, to_timestamp};
 
 impl Handler {
@@ -20,16 +20,30 @@ impl Handler {
         request: Request<CreateFriendRequestRequest>,
     ) -> Result<Response<FriendRequestRecord>, Status> {
         let actor_user_id = actor_user_id(&request)?;
-        let CreateFriendRequestRequest { target_user_id } = request.into_inner();
-        let user_id = Uuid::parse_str(&target_user_id)
-            .map_err(|_| Status::invalid_argument("Invalid UUID"))?;
+        let CreateFriendRequestRequest { target_username } = request.into_inner();
+
+        let target = user_snapshot::Entity::find()
+            .filter(user_snapshot::Column::Username.eq(&target_username))
+            .one(&self.connection)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "Friend request target username lookup failed");
+                Status::internal("Internal Server Error")
+            })?
+            .ok_or_else(|| Status::not_found("User not found"))?;
+        let user_id = target.user_id;
+
+        let requester = user_snapshot::Entity::find_by_id(actor_user_id)
+            .one(&self.connection)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "Friend request requester snapshot lookup failed");
+                Status::internal("Internal Server Error")
+            })?
+            .ok_or_else(|| Status::not_found("User not found"))?;
 
         if actor_user_id == user_id {
             return Err(Status::invalid_argument("Cannot friend yourself"));
-        }
-
-        if !user_account_exists(&self.connection, user_id).await? {
-            return Err(Status::not_found("User not found"));
         }
 
         let now = Utc::now();
@@ -177,6 +191,8 @@ impl Handler {
                         addressee_user_id: user_id.to_string(),
                         status: "pending".to_string(),
                         created_at: Some(to_timestamp(now)),
+                        requester: Some(user_summary(&requester)),
+                        addressee: Some(user_summary(&target)),
                     }))
                 })
             })

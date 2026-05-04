@@ -15,12 +15,21 @@ export const load: LayoutServerLoad = async ({ request, cookies, url }) => {
 			getBootstrapClient().getDmBootstrap({}, { metadata })
 		]);
 
+		const workspaceBootstraps = await Promise.all(
+			app.workspaces.map((workspace) =>
+				getBootstrapClient().getWorkspaceBootstrap({ workspaceId: workspace.workspaceId }, { metadata })
+			)
+		);
+
 		return {
 			sidebar: {
 				viewer: app.viewer,
-				workspaces: app.workspaces.map((workspace) => ({
+				workspaces: app.workspaces.map((workspace, index) => ({
 					...workspace,
-					routeId: encodeRouteId(workspace.workspaceId)
+					routeId: encodeRouteId(workspace.workspaceId),
+					firstChannelRouteId: workspaceBootstraps[index]?.channels[0]
+						? encodeRouteId(workspaceBootstraps[index].channels[0].channelId)
+						: undefined
 				})),
 				dms: dms.items.map((dm) => ({ ...dm, routeId: encodeRouteId(dm.dmPairId) })),
 				pendingFriendRequestCount: app.pendingFriendRequestCount

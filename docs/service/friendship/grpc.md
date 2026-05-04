@@ -19,7 +19,7 @@ Friendship exposes synchronous relationship command and bounded read contracts. 
 
 **Request fields**
 
-- `target_user_id` (`uuid`) - user receiving the request.
+- `target_username` (`string`) - public handle of the user receiving the request, such as `demo.agent#0420`.
 
 **Response fields**
 
@@ -28,11 +28,13 @@ Friendship exposes synchronous relationship command and bounded read contracts. 
 - `addressee_user_id` (`uuid`)
 - `status` (`string`)
 - `created_at` (`timestamp`)
+- `requester` (`message`) with `user_id`, `username`, `display_name`, `avatar_url`
+- `addressee` (`message`) with `user_id`, `username`, `display_name`, `avatar_url`
 
 **Contract notes**
 
 - Reject self-targeting requests.
-- Validate `target_user_id` existence through local `user_snapshot` mirror before inserting the request row.
+- Resolve `target_username` through the local `user_snapshot.username` mirror before inserting the request row.
 - Reject if the pair is already friends.
 - Reject if a block exists in either direction.
 - Reject if a pending request already exists in either direction.
@@ -177,11 +179,32 @@ Friendship exposes synchronous relationship command and bounded read contracts. 
 
 **Response fields**
 
-- `requests` (`repeated message`) with `friend_request_id`, `requester_user_id`, `addressee_user_id`, `created_at`, `status`
+- `requests` (`repeated message`) with `friend_request_id`, `requester_user_id`, `addressee_user_id`, `created_at`, `status`, `requester`, `addressee`
 - `next_page_token` (`string optional`)
 
 **Contract notes**
 
 - Returns pending rows only.
+- Each row includes requester/addressee summaries from friendship's local `user_snapshot` mirror so pending request lists are self-contained.
 - `incoming` filters by `addressee_user_id = authenticated actor`; `outgoing` filters by `requester_user_id = authenticated actor`.
 - Blocked pairs should not surface a still-pending row because `BlockUser` resolves matching requests transactionally.
+
+### `ListBlockedUsers`
+
+**Main caller:** external application server through Envoy Gateway
+
+**Request fields**
+
+- `page_size` (`int32 optional`)
+- `page_token` (`string optional`)
+
+**Response fields**
+
+- `blocked_users` (`repeated message`) with `target_user_id`, `blocked_at`, and `target` user summary.
+- `next_page_token` (`string optional`)
+
+**Contract notes**
+
+- Returns only block rows owned by the authenticated actor.
+- Each row includes target display fields from friendship's local `user_snapshot` mirror for self-contained safety UI rendering.
+- This read does not imply friendship or request state; unblock remains a separate command.

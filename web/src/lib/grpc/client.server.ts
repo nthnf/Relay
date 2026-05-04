@@ -1,12 +1,12 @@
 import { env } from '$env/dynamic/private';
 import { Metadata, Status, createChannel, createClient, type ClientError } from 'nice-grpc';
-import type { Cookies } from '@sveltejs/kit';
+import { isHttpError, isRedirect, type Cookies } from '@sveltejs/kit';
 
 import { BootstrapServiceDefinition } from '../../generated/bootstrap';
 import { ChatServiceDefinition, type ChatServiceClient } from '../../generated/chat';
 import { FriendshipServiceDefinition, type FriendshipServiceClient } from '../../generated/friendship';
 import { IdentityServiceDefinition, type IdentityServiceClient } from '../../generated/identity';
-import { RealtimeServiceDefinition } from '../../generated/realtime';
+import { RealtimeServiceDefinition, type RealtimeServiceClient } from '../../generated/realtime';
 import { WorkspaceServiceDefinition, type WorkspaceServiceClient } from '../../generated/workspace';
 import type { BootstrapServiceClient } from '../../generated/bootstrap';
 
@@ -87,6 +87,10 @@ export function getIdentityClient(): IdentityServiceClient {
 	return getGrpcClient('identity') as unknown as IdentityServiceClient;
 }
 
+export function getRealtimeClient(): RealtimeServiceClient {
+	return getGrpcClient('realtime') as unknown as RealtimeServiceClient;
+}
+
 export function getWorkspaceClient(): WorkspaceServiceClient {
 	return getGrpcClient('workspace') as unknown as WorkspaceServiceClient;
 }
@@ -148,10 +152,21 @@ export function reviveGrpcRequest(value: unknown): unknown {
 }
 
 export function grpcErrorToHttp(cause: unknown): { status: number; message: string } {
+	if (isRedirect(cause)) {
+		throw cause;
+	}
+
+	if (isHttpError(cause)) {
+		return { status: cause.status, message: cause.body.message };
+	}
+
 	const grpcError = cause as Partial<ClientError>;
 
 	if (typeof grpcError.code !== 'number') {
-		return { status: 500, message: 'Unexpected gRPC client error' };
+		return {
+			status: 500,
+			message: cause instanceof Error ? cause.message : 'Unexpected gRPC client error'
+		};
 	}
 
 	return {

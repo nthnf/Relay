@@ -10,10 +10,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config = Config::from_env()?;
     let store = Arc::new(Store::new());
     let redis = Arc::new(RedisStore::new(&config.redis_url).await?);
-    let handler = Handler::new(store.clone());
+    let handler = Handler::with_redis(store.clone(), redis.clone());
 
     tokio::try_join!(websocket::run(config.ws_bind_addr, store, redis), async {
+        let (_, health_service) = tonic_health::server::health_reporter();
+
         Server::builder()
+            .add_service(health_service)
             .add_service(handler.into_server())
             .serve(config.bind_addr)
             .await

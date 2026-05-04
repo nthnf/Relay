@@ -7,7 +7,7 @@ import {
 	grpcErrorToHttp,
 	metadataFromRequest
 } from '$lib/grpc/client.server';
-import { decodeRouteId } from '$lib/server/route-ids';
+import { decodeRouteId, encodeRouteId } from '$lib/server/route-ids';
 
 import type { RequestHandler } from './$types';
 
@@ -30,7 +30,14 @@ export const POST: RequestHandler = async ({ params, request, cookies }) => {
 		const conversation = await createChannelConversation(channel.channelId, metadata);
 		const projected = await waitForProjectedChannel(workspaceId, channel.channelId, metadata);
 
-		return json({ channel, conversation, projected }, { status: 201 });
+		return json(
+			{
+				channel,
+				conversation,
+				projected: projected ? { ...projected, routeId: encodeRouteId(projected.channelId) } : projected
+			},
+			{ status: 201 }
+		);
 	} catch (cause) {
 		const { status, message } = grpcErrorToHttp(cause);
 		error(status, message);

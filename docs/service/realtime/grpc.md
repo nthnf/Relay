@@ -64,5 +64,24 @@ Realtime exposes hot-path delivery methods used after durable writes already suc
 
 - Used when an upstream authority decides a user's active websocket sessions should no longer remain connected.
 - Realtime clears matching Redis-backed session-presence entries as part of disconnect handling.
+
+### `GetUserPresence`
+
+**Main caller:** external application server through Envoy Gateway
+
+**Request fields**
+
+- `user_ids` (`repeated uuid`) - users whose current presence should be returned.
+
+**Response fields**
+
+- `users` (`repeated message`) with `user_id`, `online`, `last_seen_at`
+
+**Contract notes**
+
+- Returns a bounded user-scoped presence snapshot from realtime-owned Redis state.
+- Missing or expired Redis presence state returns `online = false`.
+- The response intentionally does not expose connected session counts; presence is a 0/1 online state for callers.
+- This is for initial page-load and reconnect snapshots; websocket updates remain the live-change path.
 - A zero-session result is success when the actor is already offline.
 - This method must also remove any matching in-memory routes or subscriptions for the disconnected sessions.

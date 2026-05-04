@@ -8,7 +8,10 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let config = Config::from_env()?;
     let db = db::connect(&config.db_url).await?;
     let grpc = async {
+        let (_, health_service) = tonic_health::server::health_reporter();
+
         Server::builder()
+            .add_service(health_service)
             .add_service(FriendshipServer::new(db.clone()).into_server())
             .serve_with_shutdown(config.bind_addr, async {
                 let _ = tokio::signal::ctrl_c().await;

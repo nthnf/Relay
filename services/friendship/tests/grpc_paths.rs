@@ -35,7 +35,7 @@ async fn create_friend_request_path() -> Result<(), Box<dyn std::error::Error>> 
         .create_friend_request(actor_request(
             actor,
             CreateFriendRequestRequest {
-                target_user_id: target.to_string(),
+                target_username: format!("user-{target}"),
             },
         ))
         .await?
@@ -44,6 +44,14 @@ async fn create_friend_request_path() -> Result<(), Box<dyn std::error::Error>> 
     assert_eq!(response.requester_user_id, actor.to_string());
     assert_eq!(response.addressee_user_id, target.to_string());
     assert_eq!(response.status, "pending");
+    assert_eq!(
+        response.requester.as_ref().unwrap().username,
+        format!("user-{actor}")
+    );
+    assert_eq!(
+        response.addressee.as_ref().unwrap().username,
+        format!("user-{target}")
+    );
 
     let row = friend_request::Entity::find_by_id(Uuid::parse_str(&response.friend_request_id)?)
         .one(&env.db)
@@ -67,7 +75,7 @@ async fn create_friend_request_rejects_unknown_target() -> Result<(), Box<dyn st
         .create_friend_request(actor_request(
             actor,
             CreateFriendRequestRequest {
-                target_user_id: target.to_string(),
+                target_username: format!("user-{target}"),
             },
         ))
         .await
@@ -95,7 +103,7 @@ async fn accept_friend_request_path() -> Result<(), Box<dyn std::error::Error>> 
         .create_friend_request(actor_request(
             requester,
             CreateFriendRequestRequest {
-                target_user_id: actor.to_string(),
+                target_username: format!("user-{actor}"),
             },
         ))
         .await?
@@ -139,7 +147,7 @@ async fn reject_friend_request_path() -> Result<(), Box<dyn std::error::Error>> 
         .create_friend_request(actor_request(
             requester,
             CreateFriendRequestRequest {
-                target_user_id: actor.to_string(),
+                target_username: format!("user-{actor}"),
             },
         ))
         .await?
@@ -185,7 +193,7 @@ async fn remove_friend_path() -> Result<(), Box<dyn std::error::Error>> {
         .create_friend_request(actor_request(
             actor,
             CreateFriendRequestRequest {
-                target_user_id: friend.to_string(),
+                target_username: format!("user-{friend}"),
             },
         ))
         .await?
@@ -235,7 +243,7 @@ async fn block_user_path() -> Result<(), Box<dyn std::error::Error>> {
         .create_friend_request(actor_request(
             blocked,
             CreateFriendRequestRequest {
-                target_user_id: blocker.to_string(),
+                target_username: format!("user-{blocker}"),
             },
         ))
         .await?
@@ -320,7 +328,7 @@ async fn list_friends_path() -> Result<(), Box<dyn std::error::Error>> {
         .create_friend_request(actor_request(
             actor,
             CreateFriendRequestRequest {
-                target_user_id: friend.to_string(),
+                target_username: format!("user-{friend}"),
             },
         ))
         .await?
@@ -370,7 +378,7 @@ async fn list_pending_requests_path() -> Result<(), Box<dyn std::error::Error>> 
         .create_friend_request(actor_request(
             requester,
             CreateFriendRequestRequest {
-                target_user_id: addressee.to_string(),
+                target_username: format!("user-{addressee}"),
             },
         ))
         .await?;
@@ -393,6 +401,14 @@ async fn list_pending_requests_path() -> Result<(), Box<dyn std::error::Error>> 
     assert_eq!(
         response.requests[0].requester_user_id,
         requester.to_string()
+    );
+    assert_eq!(
+        response.requests[0].requester.as_ref().unwrap().username,
+        format!("user-{requester}")
+    );
+    assert_eq!(
+        response.requests[0].addressee.as_ref().unwrap().username,
+        format!("user-{addressee}")
     );
 
     env.shutdown().await;

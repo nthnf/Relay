@@ -11,7 +11,12 @@ use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::sleep;
 use tracing::{error, info, warn};
+
+const CONNECT_RETRY_DELAY: Duration = Duration::from_secs(2);
+const CONNECT_MAX_RETRIES: usize = 30;
 
 #[derive(Debug)]
 pub enum EventHandleError {
@@ -248,7 +253,7 @@ where
     }
 
     pub async fn run(self, amqp_addr: impl AsRef<str>) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let amqp = Connection::connect(amqp_addr.as_ref(), ConnectionProperties::default()).await?;
+        let amqp = connect_with_retry(amqp_addr.as_ref()).await?;
         let channel = amqp.create_channel().await?;
 
         match &self.config.topology {
@@ -375,6 +380,25 @@ where
 
         Ok(())
     }
+}
+
+async fn connect_with_retry(amqp_addr: &str) -> Result<Connection, Box<dyn Error + Send + Sync>> {
+    let mut last_error = None;
+
+    for attempt in 1..=CONNECT_MAX_RETRIES {
+        match Connection::connect(amqp_addr, ConnectionProperties::default()).await {
+            Ok(connection) => return Ok(connection),
+            Err(error) => {
+                warn!(attempt, error = %error, "amqp connection failed; retrying");
+                last_error = Some(error);
+                sleep(CONNECT_RETRY_DELAY).await;
+            }
+        }
+    }
+
+    Err(Box::new(
+        last_error.expect("amqp connection should have been attempted"),
+    ))
 }
 
 fn header_strings(headers: &FieldTable) -> HashMap<String, String> {

@@ -51,6 +51,9 @@ async fn mark_online_adds_session_and_updates_presence()
             .await?,
         1
     );
+    let presence = store.get_presence(user_id).await?;
+    assert!(presence.online);
+    assert!(presence.last_seen_at.is_some());
 
     Ok(())
 }
@@ -133,6 +136,21 @@ async fn mark_offline_flips_only_on_last_session()
     );
     let set_size: usize = store.conn.scard(&sessions_key).await?;
     assert_eq!(set_size, 0);
+    let presence = store.get_presence(user_id).await?;
+    assert!(!presence.online);
+    assert!(presence.last_seen_at.is_some());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn missing_presence_defaults_to_offline_without_session_count()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (store, _container) = start_store().await?;
+    let presence = store.get_presence(Uuid::new_v4()).await?;
+
+    assert!(!presence.online);
+    assert!(presence.last_seen_at.is_none());
 
     Ok(())
 }

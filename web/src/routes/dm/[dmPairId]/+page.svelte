@@ -1,60 +1,75 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import { env } from '$env/dynamic/public';
+	import ChatHeader from '$lib/components/chat/ChatHeader.svelte';
+	import ChatMessageList from '$lib/components/chat/ChatMessageList.svelte';
+	import DmSidebar from '$lib/components/chat/DmSidebar.svelte';
+	import MessageComposer from '$lib/components/chat/MessageComposer.svelte';
+	import PrimarySidebar from '$lib/components/chat/PrimarySidebar.svelte';
 	import { onMount } from 'svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
+	let authorNames = $derived(
+		new Map(data.authorProfiles.map((profile) => [profile.userId, profile.displayName || profile.username || profile.userId]))
+	);
+	let messages = $derived(
+		data.messages.messages.map((message) => ({
+			...message,
+			senderName: authorNames.get(message.authorUserId) ?? 'Unknown user',
+			outgoing: message.authorUserId !== data.thread.peerUserId
+		}))
+	);
+	let lastReadSeq = $derived(data.messages.messages.at(-1)?.conversationMessageSeq);
+
+	function markConversationRead() {
+		if (!data.thread.conversationId || lastReadSeq === undefined) {
+			return;
+		}
+
+		void fetch(`/api/conversations/${data.thread.conversationId}/read`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ lastReadConversationMessageSeq: Number(lastReadSeq) })
+		}).catch(() => undefined);
+	}
+
 	onMount(() => {
-		const interval = window.setInterval(() => void invalidateAll(), 3_000);
-		return () => window.clearInterval(interval);
+		markConversationRead();
+
+		const viewerUserId = data.sidebar?.viewer?.userId;
+		const targetId = data.thread.conversationId;
+
+		if (!viewerUserId || !targetId) {
+			return;
+		}
+
+		const socket = new WebSocket(`${env.PUBLIC_REALTIME_WS_URL || 'ws://localhost:30080/ws'}?user_id=${encodeURIComponent(viewerUserId)}`);
+		socket.addEventListener('open', () => {
+			socket.send(JSON.stringify({ type: 'subscribe', target_kind: 'direct_message', target_id: targetId }));
+		});
+		socket.addEventListener('message', () => void invalidateAll());
+		socket.addEventListener('error', () => undefined);
+
+		return () => socket.close();
 	});
 </script>
 
 <svelte:head><title>DM with {data.thread.peerDisplayName}</title></svelte:head>
 
-<main class="mx-auto flex min-h-screen max-w-3xl flex-col bg-slate-950 text-slate-100">
-	<header class="border-b border-white/10 px-5 py-4">
-		<p class="text-sm uppercase tracking-[0.2em] text-cyan-300">Direct message</p>
-		<h1 class="text-2xl font-semibold">{data.thread.peerDisplayName}</h1>
-		<p class="text-sm text-slate-400">@{data.thread.peerUsername}</p>
-	</header>
+<div class="flex min-h-screen bg-abyss text-snow">
+	<PrimarySidebar sidebar={data.sidebar} active="dm" />
+	<DmSidebar threads={data.sidebar?.dms ?? []} activeDmPairId={data.thread.dmPairId} />
 
-	<section class="flex-1 space-y-3 overflow-y-auto px-5 py-6">
-		{#if data.messages.messages.length === 0}
-			<p class="rounded-2xl border border-dashed border-white/15 p-6 text-center text-slate-400">
-				No messages yet.
-			</p>
-		{:else}
-			{#each data.messages.messages as message (message.messageId)}
-				<article class="rounded-2xl bg-white/5 p-4 shadow-sm ring-1 ring-white/10">
-					<div class="mb-2 flex items-center justify-between gap-4 text-xs text-slate-400">
-						<span>{message.authorUserId}</span>
-						<span>{message.createdAt?.toLocaleString()}</span>
-					</div>
-					<p class="whitespace-pre-wrap leading-relaxed">{message.deletedAt ? 'Message deleted' : message.body}</p>
-				</article>
-			{/each}
-		{/if}
-	</section>
-
-	<form method="POST" action="?/send" class="border-t border-white/10 p-5">
-		{#if form?.error}
-			<p class="mb-3 rounded-xl bg-red-500/15 px-4 py-3 text-sm text-red-200">{form.error}</p>
-		{/if}
-
-		<label class="sr-only" for="body">Message</label>
-		<div class="flex gap-3">
-			<textarea
-				id="body"
-				name="body"
-				rows="2"
-				class="min-h-14 flex-1 resize-none rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-slate-100 outline-none placeholder:text-slate-500 focus:border-cyan-300"
-				placeholder="Write a message"
-			>{form?.body ?? ''}</textarea>
-			<button class="rounded-2xl bg-cyan-300 px-5 font-semibold text-slate-950 hover:bg-cyan-200" type="submit">
-				Send
-			</button>
-		</div>
-	</form>
-</main>
+	<main class="grid min-h-screen min-w-0 flex-1 grid-rows-[auto_1fr_auto] bg-chat-main">
+		<ChatHeader
+			title={data.thread.peerDisplayName || data.thread.peerUsername || 'Direct message'}
+			subtitle={`@${data.thread.peerUsername}`}
+			avatarText={data.thread.peerDisplayName || data.thread.peerUsername || '?'}
+			variant="dm"
+		/>
+		<ChatMessageList {messages} variant="dm" showDatePill currentUserId={data.sidebar?.viewer?.userId} />
+		<MessageComposer error={form?.error} body={form?.body ?? ''} />
+	</main>
+</div>

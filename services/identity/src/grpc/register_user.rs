@@ -31,6 +31,10 @@ impl Handler {
         } = request.into_inner();
 
         let email_normalized = email.to_lowercase();
+        if username.contains('#') {
+            return Err(Status::invalid_argument("username must not contain #"));
+        }
+        let username = format!("{}#{}", username, random_discriminator());
 
         let existing_user = user_account::Entity::find()
             .filter(user_account::Column::EmailNormalized.eq(&email_normalized))
@@ -237,5 +241,24 @@ impl Handler {
             })?;
 
         Ok(response)
+    }
+}
+
+fn random_discriminator() -> String {
+    let bytes = *Uuid::new_v4().as_bytes();
+    let value = u16::from_be_bytes([bytes[0], bytes[1]]) % 10_000;
+    format!("{value:04}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::random_discriminator;
+
+    #[test]
+    fn generated_discriminator_is_four_digits() {
+        let discriminator = random_discriminator();
+
+        assert_eq!(discriminator.len(), 4);
+        assert!(discriminator.chars().all(|c| c.is_ascii_digit()));
     }
 }

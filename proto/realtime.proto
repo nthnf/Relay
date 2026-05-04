@@ -7,6 +7,7 @@ import "google/protobuf/timestamp.proto";
 service RealtimeService {
   rpc DeliverMessage(DeliverMessageRequest) returns (DeliverMessageResponse);
   rpc DisconnectActorSessions(DisconnectActorSessionsRequest) returns (DisconnectActorSessionsResponse);
+  rpc GetUserPresence(GetUserPresenceRequest) returns (GetUserPresenceResponse);
 }
 
 enum DeliverTargetKind {
@@ -67,4 +68,18 @@ message DisconnectActorSessionsRequest {
 message DisconnectActorSessionsResponse {
   bool accepted = 1;
   int32 disconnected_session_count = 2;
+}
+
+message GetUserPresenceRequest {
+  repeated string user_ids = 1;
+}
+
+message UserPresenceSummary {
+  string user_id = 1;
+  bool online = 2;
+  optional google.protobuf.Timestamp last_seen_at = 3;
+}
+
+message GetUserPresenceResponse {
+  repeated UserPresenceSummary users = 1;
 }

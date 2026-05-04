@@ -101,6 +101,20 @@ export interface DisconnectActorSessionsResponse {
   disconnectedSessionCount: number;
 }
 
+export interface GetUserPresenceRequest {
+  userIds: string[];
+}
+
+export interface UserPresenceSummary {
+  userId: string;
+  online: boolean;
+  lastSeenAt?: Date | undefined;
+}
+
+export interface GetUserPresenceResponse {
+  users: UserPresenceSummary[];
+}
+
 function createBaseDeliverMessageRequest(): DeliverMessageRequest {
   return {
     deliveryId: "",
@@ -1007,6 +1021,232 @@ export const DisconnectActorSessionsResponse: MessageFns<DisconnectActorSessions
   },
 };
 
+function createBaseGetUserPresenceRequest(): GetUserPresenceRequest {
+  return { userIds: [] };
+}
+
+export const GetUserPresenceRequest: MessageFns<GetUserPresenceRequest> = {
+  encode(message: GetUserPresenceRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.userIds) {
+      writer.uint32(10).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetUserPresenceRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetUserPresenceRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.userIds.push(reader.string());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetUserPresenceRequest {
+    return {
+      userIds: globalThis.Array.isArray(object?.userIds)
+        ? object.userIds.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.user_ids)
+        ? object.user_ids.map((e: any) => globalThis.String(e))
+        : [],
+    };
+  },
+
+  toJSON(message: GetUserPresenceRequest): unknown {
+    const obj: any = {};
+    if (message.userIds?.length) {
+      obj.userIds = message.userIds;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<GetUserPresenceRequest>): GetUserPresenceRequest {
+    return GetUserPresenceRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<GetUserPresenceRequest>): GetUserPresenceRequest {
+    const message = createBaseGetUserPresenceRequest();
+    message.userIds = object.userIds?.map((e) => e) || [];
+    return message;
+  },
+};
+
+function createBaseUserPresenceSummary(): UserPresenceSummary {
+  return { userId: "", online: false, lastSeenAt: undefined };
+}
+
+export const UserPresenceSummary: MessageFns<UserPresenceSummary> = {
+  encode(message: UserPresenceSummary, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.userId !== "") {
+      writer.uint32(10).string(message.userId);
+    }
+    if (message.online !== false) {
+      writer.uint32(16).bool(message.online);
+    }
+    if (message.lastSeenAt !== undefined) {
+      Timestamp.encode(toTimestamp(message.lastSeenAt), writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): UserPresenceSummary {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseUserPresenceSummary();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.userId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.online = reader.bool();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.lastSeenAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): UserPresenceSummary {
+    return {
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+      online: isSet(object.online) ? globalThis.Boolean(object.online) : false,
+      lastSeenAt: isSet(object.lastSeenAt)
+        ? fromJsonTimestamp(object.lastSeenAt)
+        : isSet(object.last_seen_at)
+        ? fromJsonTimestamp(object.last_seen_at)
+        : undefined,
+    };
+  },
+
+  toJSON(message: UserPresenceSummary): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.online !== false) {
+      obj.online = message.online;
+    }
+    if (message.lastSeenAt !== undefined) {
+      obj.lastSeenAt = message.lastSeenAt.toISOString();
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<UserPresenceSummary>): UserPresenceSummary {
+    return UserPresenceSummary.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<UserPresenceSummary>): UserPresenceSummary {
+    const message = createBaseUserPresenceSummary();
+    message.userId = object.userId ?? "";
+    message.online = object.online ?? false;
+    message.lastSeenAt = object.lastSeenAt ?? undefined;
+    return message;
+  },
+};
+
+function createBaseGetUserPresenceResponse(): GetUserPresenceResponse {
+  return { users: [] };
+}
+
+export const GetUserPresenceResponse: MessageFns<GetUserPresenceResponse> = {
+  encode(message: GetUserPresenceResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.users) {
+      UserPresenceSummary.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetUserPresenceResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetUserPresenceResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.users.push(UserPresenceSummary.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetUserPresenceResponse {
+    return {
+      users: globalThis.Array.isArray(object?.users)
+        ? object.users.map((e: any) => UserPresenceSummary.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: GetUserPresenceResponse): unknown {
+    const obj: any = {};
+    if (message.users?.length) {
+      obj.users = message.users.map((e) => UserPresenceSummary.toJSON(e));
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<GetUserPresenceResponse>): GetUserPresenceResponse {
+    return GetUserPresenceResponse.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<GetUserPresenceResponse>): GetUserPresenceResponse {
+    const message = createBaseGetUserPresenceResponse();
+    message.users = object.users?.map((e) => UserPresenceSummary.fromPartial(e)) || [];
+    return message;
+  },
+};
+
 export type RealtimeServiceDefinition = typeof RealtimeServiceDefinition;
 export const RealtimeServiceDefinition = {
   name: "RealtimeService",
@@ -1028,6 +1268,14 @@ export const RealtimeServiceDefinition = {
       responseStream: false,
       options: {},
     },
+    getUserPresence: {
+      name: "GetUserPresence",
+      requestType: GetUserPresenceRequest as typeof GetUserPresenceRequest,
+      requestStream: false,
+      responseType: GetUserPresenceResponse as typeof GetUserPresenceResponse,
+      responseStream: false,
+      options: {},
+    },
   },
 } as const;
 
@@ -1040,6 +1288,10 @@ export interface RealtimeServiceImplementation<CallContextExt = {}> {
     request: DisconnectActorSessionsRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<DisconnectActorSessionsResponse>>;
+  getUserPresence(
+    request: GetUserPresenceRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<GetUserPresenceResponse>>;
 }
 
 export interface RealtimeServiceClient<CallOptionsExt = {}> {
@@ -1051,6 +1303,10 @@ export interface RealtimeServiceClient<CallOptionsExt = {}> {
     request: DeepPartial<DisconnectActorSessionsRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<DisconnectActorSessionsResponse>;
+  getUserPresence(
+    request: DeepPartial<GetUserPresenceRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<GetUserPresenceResponse>;
 }
 
 type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;

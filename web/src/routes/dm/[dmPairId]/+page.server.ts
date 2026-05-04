@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 
-import { getBootstrapClient, getChatClient, grpcErrorToHttp, metadataFromRequest } from '$lib/grpc/client.server';
+import { getBootstrapClient, getChatClient, getIdentityClient, grpcErrorToHttp, metadataFromRequest } from '$lib/grpc/client.server';
 import { decodeRouteId } from '$lib/server/route-ids';
 
 import type { Actions, PageServerLoad } from './$types';
@@ -22,7 +22,12 @@ export const load: PageServerLoad = async ({ params, request, cookies }) => {
 			{ metadata }
 		);
 
-		return { thread, messages };
+		const authorProfiles = await loadAuthorProfiles(
+			messages.messages.map((message) => message.authorUserId),
+			metadata
+		);
+
+		return { thread, messages, authorProfiles };
 	} catch (cause) {
 		const { status, message } = grpcErrorToHttp(cause);
 		error(status, message);
@@ -55,6 +60,44 @@ export const actions: Actions = {
 		}
 
 		redirect(303, `/dm/${params.dmPairId}`);
+	},
+	edit: async ({ params, request, cookies }) => {
+		const form = await request.formData();
+		const messageId = String(form.get('messageId') ?? '').trim();
+		const newBody = String(form.get('newBody') ?? '').trim();
+
+		if (!messageId || !newBody) {
+			return fail(400, { editError: 'Message and body are required' });
+		}
+
+		const metadata = metadataFromRequest(request.headers, cookies);
+
+		try {
+			await getChatClient().editMessage({ messageId, newBody }, { metadata });
+		} catch (cause) {
+			const { status, message } = grpcErrorToHttp(cause);
+			return fail(status, { editError: message });
+		}
+
+		redirect(303, `/dm/${params.dmPairId}`);
+	},
+	delete: async ({ params, request, cookies }) => {
+		const messageId = String((await request.formData()).get('messageId') ?? '').trim();
+
+		if (!messageId) {
+			return fail(400, { deleteError: 'Message is required' });
+		}
+
+		const metadata = metadataFromRequest(request.headers, cookies);
+
+		try {
+			await getChatClient().deleteMessage({ messageId }, { metadata });
+		} catch (cause) {
+			const { status, message } = grpcErrorToHttp(cause);
+			return fail(status, { deleteError: message });
+		}
+
+		redirect(303, `/dm/${params.dmPairId}`);
 	}
 };
 
@@ -64,4 +107,18 @@ function decodeParam(value: string): string {
 	} catch {
 		error(400, 'Invalid route id');
 	}
+}
+
+async function loadAuthorProfiles(
+	authorUserIds: string[],
+	metadata: ReturnType<typeof metadataFromRequest>
+) {
+	const userIds = [...new Set(authorUserIds.filter(Boolean))];
+
+	if (userIds.length === 0) {
+		return [];
+	}
+
+	const response = await getIdentityClient().getUsersByIds({ userIds }, { metadata });
+	return response.users;
 }

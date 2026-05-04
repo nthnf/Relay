@@ -5,7 +5,7 @@ use axum::{
         connect_info::ConnectInfo,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, Uri},
     response::IntoResponse,
     routing::any,
 };
@@ -67,6 +67,7 @@ async fn ws_handler(
     user_agent: Option<TypedHeader<headers::UserAgent>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
+    uri: Uri,
 ) -> Result<impl IntoResponse, StatusCode> {
     let user_agent = user_agent
         .map(|TypedHeader(user_agent)| user_agent.to_string())
@@ -76,11 +77,21 @@ async fn ws_handler(
         .get("x-user-id")
         .and_then(|value| value.to_str().ok())
         .and_then(|value| Uuid::parse_str(value).ok())
+        .or_else(|| actor_id_from_query(&uri))
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
     tracing::debug!(%user_agent, %addr, %actor_id, "ws connected");
 
     Ok(ws.on_upgrade(move |socket| handle_socket(socket, state.store, state.redis, actor_id)))
+}
+
+fn actor_id_from_query(uri: &Uri) -> Option<Uuid> {
+    uri.query()?.split('&').find_map(|part| {
+        let (key, value) = part.split_once('=')?;
+        (key == "user_id")
+            .then(|| Uuid::parse_str(value).ok())
+            .flatten()
+    })
 }
 
 async fn handle_socket(

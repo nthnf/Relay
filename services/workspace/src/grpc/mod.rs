@@ -12,6 +12,7 @@ pub mod issue_invitation;
 pub mod join_workspace_by_invite_link;
 pub mod list_channels;
 pub mod list_workspace_for_user;
+pub mod list_workspace_members;
 pub mod remove_member;
 pub mod revoke_invite_link;
 

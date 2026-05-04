@@ -154,6 +154,27 @@ Workspace exposes synchronous workspace, membership, invitation, channel-metadat
 - `position` values are expected to be unique among active channels within a workspace in v1 because duplicate create-time positions are rejected.
 - This method returns metadata only; message previews and unread counts belong to `bootstrap` or `chat`-driven projections.
 
+### `ListWorkspaceMembers`
+
+**Main caller:** external application server through Envoy Gateway
+
+**Request fields**
+
+- `workspace_id` (`uuid`)
+- `page_size` (`int32 optional`)
+- `page_token` (`string optional`)
+
+**Response fields**
+
+- `members` (`repeated message`) with `user_id`, `username`, `display_name`, `avatar_url`, `joined_at`, and `added_by_user_id`.
+- `next_page_token` (`string optional`)
+
+**Contract notes**
+
+- Return only active memberships for workspaces where the authenticated actor is an active member.
+- Member display fields come from workspace's local `user_snapshot` mirror so workspace membership UI can render without crossing service databases.
+- This is a bounded workspace-owned read; richer aggregate member panels can still compose presence from `realtime` separately.
+
 ### `AddMember`
 
 **Main caller:** external application server through Envoy Gateway

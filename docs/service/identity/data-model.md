@@ -35,7 +35,7 @@ Mutable profile basics owned by identity.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `user_id` | `uuid` | Primary key and foreign key to `user_account.user_id`. |
-| `username` | `text` | Platform-unique username. |
+| `username` | `text` | Platform-unique public handle in `base#dddd` form. |
 | `display_name` | `text` | User-facing display label. |
 | `avatar_url` | `text null` | Optional avatar asset URL. |
 | `created_at` | `timestamptz` | Row creation time. |
@@ -45,6 +45,7 @@ Semantic rules:
 
 - `user_profile.user_id` is a 1:1 relation with `user_account.user_id`.
 - `username` must be unique because downstream services and projections may use it as a stable display field.
+- Registration accepts a base username, rejects `#`, appends a server-generated four-digit discriminator, and stores the combined handle here.
 - Profile basics published in events must come from this table, not duplicated edge-session state.
 
 ### `user_credential_password`

@@ -146,6 +146,26 @@ export interface ListChannelsResponse {
   channels: ChannelSummary[];
 }
 
+export interface WorkspaceMemberSummary {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl?: string | undefined;
+  joinedAt: Date | undefined;
+  addedByUserId?: string | undefined;
+}
+
+export interface ListWorkspaceMembersRequest {
+  workspaceId: string;
+  pageSize?: number | undefined;
+  pageToken?: string | undefined;
+}
+
+export interface ListWorkspaceMembersResponse {
+  members: WorkspaceMemberSummary[];
+  nextPageToken?: string | undefined;
+}
+
 export interface AddMemberRequest {
   workspaceId: string;
   targetUserId: string;
@@ -1864,6 +1884,359 @@ export const ListChannelsResponse: MessageFns<ListChannelsResponse> = {
   },
 };
 
+function createBaseWorkspaceMemberSummary(): WorkspaceMemberSummary {
+  return {
+    userId: "",
+    username: "",
+    displayName: "",
+    avatarUrl: undefined,
+    joinedAt: undefined,
+    addedByUserId: undefined,
+  };
+}
+
+export const WorkspaceMemberSummary: MessageFns<WorkspaceMemberSummary> = {
+  encode(message: WorkspaceMemberSummary, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.userId !== "") {
+      writer.uint32(10).string(message.userId);
+    }
+    if (message.username !== "") {
+      writer.uint32(18).string(message.username);
+    }
+    if (message.displayName !== "") {
+      writer.uint32(26).string(message.displayName);
+    }
+    if (message.avatarUrl !== undefined) {
+      writer.uint32(34).string(message.avatarUrl);
+    }
+    if (message.joinedAt !== undefined) {
+      Timestamp.encode(toTimestamp(message.joinedAt), writer.uint32(42).fork()).join();
+    }
+    if (message.addedByUserId !== undefined) {
+      writer.uint32(50).string(message.addedByUserId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): WorkspaceMemberSummary {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseWorkspaceMemberSummary();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.userId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.username = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.displayName = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.avatarUrl = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.joinedAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.addedByUserId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): WorkspaceMemberSummary {
+    return {
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+      username: isSet(object.username) ? globalThis.String(object.username) : "",
+      displayName: isSet(object.displayName)
+        ? globalThis.String(object.displayName)
+        : isSet(object.display_name)
+        ? globalThis.String(object.display_name)
+        : "",
+      avatarUrl: isSet(object.avatarUrl)
+        ? globalThis.String(object.avatarUrl)
+        : isSet(object.avatar_url)
+        ? globalThis.String(object.avatar_url)
+        : undefined,
+      joinedAt: isSet(object.joinedAt)
+        ? fromJsonTimestamp(object.joinedAt)
+        : isSet(object.joined_at)
+        ? fromJsonTimestamp(object.joined_at)
+        : undefined,
+      addedByUserId: isSet(object.addedByUserId)
+        ? globalThis.String(object.addedByUserId)
+        : isSet(object.added_by_user_id)
+        ? globalThis.String(object.added_by_user_id)
+        : undefined,
+    };
+  },
+
+  toJSON(message: WorkspaceMemberSummary): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.username !== "") {
+      obj.username = message.username;
+    }
+    if (message.displayName !== "") {
+      obj.displayName = message.displayName;
+    }
+    if (message.avatarUrl !== undefined) {
+      obj.avatarUrl = message.avatarUrl;
+    }
+    if (message.joinedAt !== undefined) {
+      obj.joinedAt = message.joinedAt.toISOString();
+    }
+    if (message.addedByUserId !== undefined) {
+      obj.addedByUserId = message.addedByUserId;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<WorkspaceMemberSummary>): WorkspaceMemberSummary {
+    return WorkspaceMemberSummary.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<WorkspaceMemberSummary>): WorkspaceMemberSummary {
+    const message = createBaseWorkspaceMemberSummary();
+    message.userId = object.userId ?? "";
+    message.username = object.username ?? "";
+    message.displayName = object.displayName ?? "";
+    message.avatarUrl = object.avatarUrl ?? undefined;
+    message.joinedAt = object.joinedAt ?? undefined;
+    message.addedByUserId = object.addedByUserId ?? undefined;
+    return message;
+  },
+};
+
+function createBaseListWorkspaceMembersRequest(): ListWorkspaceMembersRequest {
+  return { workspaceId: "", pageSize: undefined, pageToken: undefined };
+}
+
+export const ListWorkspaceMembersRequest: MessageFns<ListWorkspaceMembersRequest> = {
+  encode(message: ListWorkspaceMembersRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.workspaceId !== "") {
+      writer.uint32(10).string(message.workspaceId);
+    }
+    if (message.pageSize !== undefined) {
+      writer.uint32(16).int32(message.pageSize);
+    }
+    if (message.pageToken !== undefined) {
+      writer.uint32(26).string(message.pageToken);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ListWorkspaceMembersRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseListWorkspaceMembersRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.workspaceId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.pageSize = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.pageToken = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ListWorkspaceMembersRequest {
+    return {
+      workspaceId: isSet(object.workspaceId)
+        ? globalThis.String(object.workspaceId)
+        : isSet(object.workspace_id)
+        ? globalThis.String(object.workspace_id)
+        : "",
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : undefined,
+      pageToken: isSet(object.pageToken)
+        ? globalThis.String(object.pageToken)
+        : isSet(object.page_token)
+        ? globalThis.String(object.page_token)
+        : undefined,
+    };
+  },
+
+  toJSON(message: ListWorkspaceMembersRequest): unknown {
+    const obj: any = {};
+    if (message.workspaceId !== "") {
+      obj.workspaceId = message.workspaceId;
+    }
+    if (message.pageSize !== undefined) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    if (message.pageToken !== undefined) {
+      obj.pageToken = message.pageToken;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ListWorkspaceMembersRequest>): ListWorkspaceMembersRequest {
+    return ListWorkspaceMembersRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ListWorkspaceMembersRequest>): ListWorkspaceMembersRequest {
+    const message = createBaseListWorkspaceMembersRequest();
+    message.workspaceId = object.workspaceId ?? "";
+    message.pageSize = object.pageSize ?? undefined;
+    message.pageToken = object.pageToken ?? undefined;
+    return message;
+  },
+};
+
+function createBaseListWorkspaceMembersResponse(): ListWorkspaceMembersResponse {
+  return { members: [], nextPageToken: undefined };
+}
+
+export const ListWorkspaceMembersResponse: MessageFns<ListWorkspaceMembersResponse> = {
+  encode(message: ListWorkspaceMembersResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.members) {
+      WorkspaceMemberSummary.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.nextPageToken !== undefined) {
+      writer.uint32(18).string(message.nextPageToken);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ListWorkspaceMembersResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseListWorkspaceMembersResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.members.push(WorkspaceMemberSummary.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.nextPageToken = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ListWorkspaceMembersResponse {
+    return {
+      members: globalThis.Array.isArray(object?.members)
+        ? object.members.map((e: any) => WorkspaceMemberSummary.fromJSON(e))
+        : [],
+      nextPageToken: isSet(object.nextPageToken)
+        ? globalThis.String(object.nextPageToken)
+        : isSet(object.next_page_token)
+        ? globalThis.String(object.next_page_token)
+        : undefined,
+    };
+  },
+
+  toJSON(message: ListWorkspaceMembersResponse): unknown {
+    const obj: any = {};
+    if (message.members?.length) {
+      obj.members = message.members.map((e) => WorkspaceMemberSummary.toJSON(e));
+    }
+    if (message.nextPageToken !== undefined) {
+      obj.nextPageToken = message.nextPageToken;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ListWorkspaceMembersResponse>): ListWorkspaceMembersResponse {
+    return ListWorkspaceMembersResponse.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ListWorkspaceMembersResponse>): ListWorkspaceMembersResponse {
+    const message = createBaseListWorkspaceMembersResponse();
+    message.members = object.members?.map((e) => WorkspaceMemberSummary.fromPartial(e)) || [];
+    message.nextPageToken = object.nextPageToken ?? undefined;
+    return message;
+  },
+};
+
 function createBaseAddMemberRequest(): AddMemberRequest {
   return { workspaceId: "", targetUserId: "" };
 }
@@ -3551,6 +3924,14 @@ export const WorkspaceServiceDefinition = {
       responseStream: false,
       options: {},
     },
+    listWorkspaceMembers: {
+      name: "ListWorkspaceMembers",
+      requestType: ListWorkspaceMembersRequest as typeof ListWorkspaceMembersRequest,
+      requestStream: false,
+      responseType: ListWorkspaceMembersResponse as typeof ListWorkspaceMembersResponse,
+      responseStream: false,
+      options: {},
+    },
     addMember: {
       name: "AddMember",
       requestType: AddMemberRequest as typeof AddMemberRequest,
@@ -3635,6 +4016,10 @@ export interface WorkspaceServiceImplementation<CallContextExt = {}> {
     request: ListChannelsRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<ListChannelsResponse>>;
+  listWorkspaceMembers(
+    request: ListWorkspaceMembersRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<ListWorkspaceMembersResponse>>;
   addMember(request: AddMemberRequest, context: CallContext & CallContextExt): Promise<DeepPartial<AddMemberResponse>>;
   removeMember(
     request: RemoveMemberRequest,
@@ -3687,6 +4072,10 @@ export interface WorkspaceServiceClient<CallOptionsExt = {}> {
     request: DeepPartial<ListChannelsRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<ListChannelsResponse>;
+  listWorkspaceMembers(
+    request: DeepPartial<ListWorkspaceMembersRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<ListWorkspaceMembersResponse>;
   addMember(request: DeepPartial<AddMemberRequest>, options?: CallOptions & CallOptionsExt): Promise<AddMemberResponse>;
   removeMember(
     request: DeepPartial<RemoveMemberRequest>,

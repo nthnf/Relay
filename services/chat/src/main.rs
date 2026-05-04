@@ -1,5 +1,7 @@
 use chat::{
-    amqp, config::Config, db,
+    amqp,
+    config::Config,
+    db,
     grpc::{ChatServer, clients::Clients},
 };
 use relay_amqp::AmqpSubscriber;
@@ -14,7 +16,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let amqp_handler = Arc::new(amqp::AmqpHandler::new(db.clone()));
 
     let grpc = async {
+        let (_, health_service) = tonic_health::server::health_reporter();
+
         Server::builder()
+            .add_service(health_service)
             .add_service(ChatServer::new(db.clone(), clients).into_server())
             .serve_with_shutdown(config.bind_addr, async {
                 let _ = tokio::signal::ctrl_c().await;

@@ -5,8 +5,9 @@ use relay_proto::workspace::{
     CreateWorkspaceRequest, CreateWorkspaceResponse, GetWorkspaceRequest, GetWorkspaceResponse,
     IssueInvitationRequest, IssueInvitationResponse, JoinWorkspaceByInviteLinkRequest,
     JoinWorkspaceByInviteLinkResponse, ListChannelsRequest, ListChannelsResponse,
-    ListWorkspacesForUserRequest, ListWorkspacesForUserResponse, RemoveMemberRequest,
-    RemoveMemberResponse, RevokeInviteLinkRequest, RevokeInviteLinkResponse,
+    ListWorkspaceMembersRequest, ListWorkspaceMembersResponse, ListWorkspacesForUserRequest,
+    ListWorkspacesForUserResponse, RemoveMemberRequest, RemoveMemberResponse,
+    RevokeInviteLinkRequest, RevokeInviteLinkResponse,
     workspace_service_server::{WorkspaceService, WorkspaceServiceServer},
 };
 use sea_orm::DatabaseConnection;
@@ -69,6 +70,13 @@ impl WorkspaceService for Handler {
         request: Request<ListChannelsRequest>,
     ) -> Result<Response<ListChannelsResponse>, Status> {
         self.list_channels(request).await
+    }
+
+    async fn list_workspace_members(
+        &self,
+        request: Request<ListWorkspaceMembersRequest>,
+    ) -> Result<Response<ListWorkspaceMembersResponse>, Status> {
+        self.list_workspace_members(request).await
     }
 
     async fn add_member(

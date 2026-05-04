@@ -13,6 +13,14 @@ service FriendshipService {
   rpc UnblockUser(UnblockUserRequest) returns (UnblockUserResponse);
   rpc ListFriends(ListFriendsRequest) returns (ListFriendsResponse);
   rpc ListPendingRequests(ListPendingRequestsRequest) returns (ListPendingRequestsResponse);
+  rpc ListBlockedUsers(ListBlockedUsersRequest) returns (ListBlockedUsersResponse);
+}
+
+message UserSummary {
+  string user_id = 1;
+  string username = 2;
+  string display_name = 3;
+  optional string avatar_url = 4;
 }
 
 message FriendRequestRecord {
@@ -21,10 +29,12 @@ message FriendRequestRecord {
   string addressee_user_id = 3;
   string status = 4;
   google.protobuf.Timestamp created_at = 5;
+  UserSummary requester = 6;
+  UserSummary addressee = 7;
 }
 
 message CreateFriendRequestRequest {
-  string target_user_id = 1;
+  string target_username = 1;
 }
 
 message AcceptFriendRequestRequest {
@@ -99,5 +109,21 @@ message ListPendingRequestsRequest {
 
 message ListPendingRequestsResponse {
   repeated FriendRequestRecord requests = 1;
+  optional string next_page_token = 2;
+}
+
+message ListBlockedUsersRequest {
+  optional int32 page_size = 1;
+  optional string page_token = 2;
+}
+
+message BlockedUserSummary {
+  string target_user_id = 1;
+  google.protobuf.Timestamp blocked_at = 2;
+  UserSummary target = 3;
+}
+
+message ListBlockedUsersResponse {
+  repeated BlockedUserSummary blocked_users = 1;
   optional string next_page_token = 2;
 }

@@ -8,15 +8,22 @@ import {
 	grpcErrorToHttp,
 	metadataFromRequest
 } from '$lib/grpc/client.server';
+import type { UserSummary } from '../../generated/friendship';
 import { decodeRouteId, encodeRouteId } from '$lib/server/route-ids';
 
 import type { Actions, PageServerLoad } from './$types';
+
+type BlockedUser = {
+	targetUserId: string;
+	routeUserId: string;
+	profile?: UserSummary;
+};
 
 export const load: PageServerLoad = async ({ request, cookies }) => {
 	const metadata = metadataFromRequest(request.headers, cookies);
 
 	try {
-		const [friends, incoming, outgoing] = await Promise.all([
+		const [friends, incoming, outgoing, blocked] = await Promise.all([
 			getFriendshipClient().listFriends({ pageSize: 100 }, { metadata }),
 			getFriendshipClient().listPendingRequests(
 				{ direction: 'incoming', pageSize: 100 },
@@ -25,13 +32,12 @@ export const load: PageServerLoad = async ({ request, cookies }) => {
 			getFriendshipClient().listPendingRequests(
 				{ direction: 'outgoing', pageSize: 100 },
 				{ metadata }
-			)
+			),
+			getFriendshipClient().listBlockedUsers({ pageSize: 100 }, { metadata })
 		]);
-		const users = friends.friends.length
-			? await getIdentityClient().getUsersByIds(
-					{ userIds: friends.friends.map((friend) => friend.friendUserId) },
-					{ metadata }
-				)
+		const userIds = [...new Set(friends.friends.map((friend) => friend.friendUserId))];
+		const users = userIds.length
+			? await getIdentityClient().getUsersByIds({ userIds }, { metadata })
 			: { users: [] };
 		const profilesById = new Map(users.users.map((user) => [user.userId, user]));
 
@@ -41,8 +47,19 @@ export const load: PageServerLoad = async ({ request, cookies }) => {
 				routeUserId: encodeRouteId(friend.friendUserId),
 				profile: profilesById.get(friend.friendUserId)
 			})),
-			incoming: incoming.requests,
-			outgoing: outgoing.requests
+			incoming: incoming.requests.map((request) => ({
+				...request,
+				routeUserId: encodeRouteId(request.requesterUserId)
+			})),
+			outgoing: outgoing.requests.map((request) => ({
+				...request,
+				routeUserId: encodeRouteId(request.addresseeUserId)
+			})),
+			blocked: blocked.blockedUsers.map((blockedUser) => ({
+				targetUserId: blockedUser.targetUserId,
+				routeUserId: encodeRouteId(blockedUser.targetUserId),
+				profile: blockedUser.target
+			})) as BlockedUser[]
 		};
 	} catch (cause) {
 		const { status, message } = grpcErrorToHttp(cause);
@@ -80,15 +97,15 @@ export const actions: Actions = {
 	},
 	requestFriend: async ({ request, cookies }) => {
 		const formData = await request.formData();
-		const targetUserId = String(formData.get('targetUserId') ?? '').trim();
+		const targetUsername = String(formData.get('targetUsername') ?? '').trim();
 
-		if (!targetUserId) {
-			return fail(400, { error: 'Target user ID is required' });
+		if (!targetUsername) {
+			return fail(400, { error: 'Username is required' });
 		}
 
 		try {
 			await getFriendshipClient().createFriendRequest(
-				{ targetUserId },
+				{ targetUsername },
 				{ metadata: metadataFromRequest(request.headers, cookies) }
 			);
 		} catch (cause) {
@@ -175,7 +192,7 @@ export const actions: Actions = {
 		redirect(303, '/friends');
 	},
 	unblockUser: async ({ request, cookies }) => {
-		const targetUserId = stringFormValue((await request.formData()).get('targetUserId'));
+		const targetUserId = decodeFormRouteId((await request.formData()).get('targetUserId'));
 
 		if (!targetUserId) {
 			return fail(400, { error: 'Target user ID is required' });

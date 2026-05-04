@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 mod common;
 
-use common::{TestEnv, insert_user_account, insert_user_profile};
+use common::{TestEnv, insert_user_account};
 use identity::entity::{outbox_event, user_account, user_profile};
 use relay_proto::identity::RegisterUserRequest;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
@@ -41,7 +41,9 @@ async fn register_user_persists_identity_state_and_outbox_events()
         .one(&env.db)
         .await?
         .expect("user profile row");
-    assert_eq!(profile.username, "user1");
+    assert!(profile.username.starts_with("user1#"));
+    assert_eq!(profile.username.len(), "user1#0000".len());
+    assert!(profile.username[6..].chars().all(|c| c.is_ascii_digit()));
     assert_eq!(profile.display_name, "User One");
 
     let outbox_rows = outbox_event::Entity::find()
@@ -94,30 +96,9 @@ async fn register_user_returns_already_exists_for_duplicate_email()
 }
 
 #[tokio::test]
-async fn register_user_returns_already_exists_for_duplicate_username_constraint()
+async fn register_user_rejects_username_with_discriminator_separator()
 -> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
-    let now = chrono::Utc::now();
-    let existing_user_id = Uuid::new_v4();
-
-    insert_user_account(
-        &env.db,
-        existing_user_id,
-        "existing@example.com",
-        None,
-        "active",
-        now,
-    )
-    .await?;
-    insert_user_profile(
-        &env.db,
-        existing_user_id,
-        "alice",
-        "Existing Alice",
-        None,
-        now,
-    )
-    .await?;
 
     let error = env
         .client
@@ -125,18 +106,18 @@ async fn register_user_returns_already_exists_for_duplicate_username_constraint(
         .register_user(RegisterUserRequest {
             email: "new@example.com".to_string(),
             password: "plain-password".to_string(),
-            username: "alice".to_string(),
+            username: "alice#0001".to_string(),
             display_name: "Alice Two".to_string(),
             avatar_url: None,
         })
         .await
-        .expect_err("duplicate username should be rejected");
+        .expect_err("client-supplied discriminator should be rejected");
 
-    assert_eq!(error.code(), tonic::Code::AlreadyExists);
-    assert_eq!(error.message(), "email or username already exists");
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    assert_eq!(error.message(), "username must not contain #");
 
     let accounts = user_account::Entity::find().all(&env.db).await?;
-    assert_eq!(accounts.len(), 1);
+    assert_eq!(accounts.len(), 0);
 
     env.shutdown().await;
     Ok(())

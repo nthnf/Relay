@@ -3,6 +3,7 @@ use tonic::Status;
 use uuid::Uuid;
 
 use crate::entity::user_snapshot;
+use relay_proto::friendship::UserSummary;
 
 pub(super) async fn user_account_exists<C>(db: &C, user_id: Uuid) -> Result<bool, Status>
 where
@@ -17,6 +18,15 @@ where
         })?;
 
     Ok(account.is_some())
+}
+
+pub(super) fn user_summary(snapshot: &user_snapshot::Model) -> UserSummary {
+    UserSummary {
+        user_id: snapshot.user_id.to_string(),
+        username: snapshot.username.clone(),
+        display_name: snapshot.display_name.clone(),
+        avatar_url: snapshot.avatar_url.clone(),
+    }
 }
 
 #[cfg(test)]

@@ -1,6 +1,8 @@
 import { json, redirect } from '@sveltejs/kit';
 
+import { getBootstrapClient, metadataFromRequest } from '$lib/grpc/client.server';
 import { accessTokenCookieName } from '$lib/server/auth-cookies';
+import { encodeRouteId } from '$lib/server/route-ids';
 
 import type { Handle } from '@sveltejs/kit';
 
@@ -8,7 +10,13 @@ const publicPrefixes = ['/auth/', '/_app/', '/favicon'];
 const publicFiles = /\.(?:css|js|ico|png|jpg|jpeg|svg|webp|avif|gif|woff2?)$/i;
 
 export const handle: Handle = async ({ event, resolve }) => {
-	if (isPublicPath(event.url.pathname) || event.cookies.get(accessTokenCookieName())) {
+	const authenticated = Boolean(event.cookies.get(accessTokenCookieName()));
+
+	if (authenticated && isAuthPage(event.url.pathname)) {
+		redirect(303, await defaultAuthenticatedRoute(event));
+	}
+
+	if (isPublicPath(event.url.pathname) || authenticated) {
 		return resolve(event);
 	}
 
@@ -21,5 +29,35 @@ export const handle: Handle = async ({ event, resolve }) => {
 };
 
 function isPublicPath(pathname: string): boolean {
-	return publicPrefixes.some((prefix) => pathname.startsWith(prefix)) || publicFiles.test(pathname);
+	return pathname === '/' || publicPrefixes.some((prefix) => pathname.startsWith(prefix)) || publicFiles.test(pathname);
+}
+
+function isAuthPage(pathname: string): boolean {
+	return pathname.startsWith('/auth/') && !pathname.startsWith('/auth/logout');
+}
+
+async function defaultAuthenticatedRoute(event: Parameters<Handle>[0]['event']): Promise<string> {
+	try {
+		const metadata = metadataFromRequest(event.request.headers, event.cookies);
+		const app = await getBootstrapClient().getAppBootstrap({}, { metadata });
+		const workspace = app.workspaces[0];
+
+		if (!workspace) {
+			return '/profile';
+		}
+
+		const workspaceBootstrap = await getBootstrapClient().getWorkspaceBootstrap(
+			{ workspaceId: workspace.workspaceId },
+			{ metadata }
+		);
+		const channel = workspaceBootstrap.channels[0];
+
+		if (!channel) {
+			return `/workspace/${encodeRouteId(workspace.workspaceId)}`;
+		}
+
+		return `/workspace/${encodeRouteId(workspace.workspaceId)}/${encodeRouteId(channel.channelId)}`;
+	} catch {
+		return '/profile';
+	}
 }

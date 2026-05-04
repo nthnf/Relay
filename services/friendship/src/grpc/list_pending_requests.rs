@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use chrono::Utc;
 use relay_proto::friendship::{
     FriendRequestRecord, ListPendingRequestsRequest, ListPendingRequestsResponse,
@@ -10,9 +12,10 @@ use tonic::{Request, Response, Status};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::entity::friend_request;
+use crate::entity::{friend_request, user_snapshot};
 
 use super::handler::Handler;
+use super::lib::user_summary;
 use relay_types::{actor_user_id, to_timestamp};
 
 impl Handler {
@@ -87,6 +90,23 @@ impl Handler {
                         rows.pop();
                     }
 
+                    let user_ids = rows
+                        .iter()
+                        .flat_map(|row| [row.requester_user_id, row.addressee_user_id])
+                        .collect::<HashSet<_>>();
+
+                    let snapshots = user_snapshot::Entity::find()
+                        .filter(user_snapshot::Column::UserId.is_in(user_ids))
+                        .all(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "List pending request user snapshot query failed");
+                            Status::internal("Internal Server Error")
+                        })?
+                        .into_iter()
+                        .map(|snapshot| (snapshot.user_id, snapshot))
+                        .collect::<HashMap<_, _>>();
+
                     let next_page_token = if has_more {
                         rows.last().map(encode_page_token)
                     } else {
@@ -97,6 +117,8 @@ impl Handler {
                         requests: rows
                             .into_iter()
                             .map(|row| FriendRequestRecord {
+                                requester: snapshots.get(&row.requester_user_id).map(user_summary),
+                                addressee: snapshots.get(&row.addressee_user_id).map(user_summary),
                                 friend_request_id: row.request_id.to_string(),
                                 requester_user_id: row.requester_user_id.to_string(),
                                 addressee_user_id: row.addressee_user_id.to_string(),

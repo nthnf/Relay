@@ -76,4 +76,11 @@ impl FriendshipService for Handler {
     ) -> Result<tonic::Response<relay_proto::friendship::ListPendingRequestsResponse>, Status> {
         self.list_pending_requests(request).await
     }
+
+    async fn list_blocked_users(
+        &self,
+        request: Request<relay_proto::friendship::ListBlockedUsersRequest>,
+    ) -> Result<tonic::Response<relay_proto::friendship::ListBlockedUsersResponse>, Status> {
+        self.list_blocked_users(request).await
+    }
 }

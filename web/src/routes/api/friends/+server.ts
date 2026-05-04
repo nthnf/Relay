@@ -15,7 +15,10 @@ export const GET: RequestHandler = async ({ request, cookies, url }) => {
 	const metadata = metadataFromRequest(request.headers, cookies);
 
 	try {
-		const friends = await getFriendshipClient().listFriends({ pageSize, pageToken }, { metadata });
+		const [friends, blocked] = await Promise.all([
+			getFriendshipClient().listFriends({ pageSize, pageToken }, { metadata }),
+			getFriendshipClient().listBlockedUsers({ pageSize, pageToken: undefined }, { metadata })
+		]);
 		const profiles = friends.friends.length
 			? await getIdentityClient().getUsersByIds(
 					{ userIds: friends.friends.map((friend) => friend.friendUserId) },
@@ -23,7 +26,7 @@ export const GET: RequestHandler = async ({ request, cookies, url }) => {
 				)
 			: { users: [] };
 
-		return json({ ...friends, profiles: profiles.users });
+		return json({ ...friends, profiles: profiles.users, blockedUsers: blocked.blockedUsers });
 	} catch (cause) {
 		const { status, message } = grpcErrorToHttp(cause);
 		error(status, message);
