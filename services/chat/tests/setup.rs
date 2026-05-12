@@ -3,7 +3,7 @@ use relay_proto::realtime::realtime_service_client::RealtimeServiceClient;
 use relay_proto::realtime::realtime_service_server::{RealtimeService, RealtimeServiceServer};
 use relay_proto::realtime::{
     DeliverMessageRequest, DeliverMessageResponse, DisconnectActorSessionsRequest,
-    DisconnectActorSessionsResponse,
+    DisconnectActorSessionsResponse, GetUserPresenceRequest, GetUserPresenceResponse,
 };
 use relay_proto::workspace::workspace_service_client::WorkspaceServiceClient;
 use relay_proto::workspace::workspace_service_server::{WorkspaceService, WorkspaceServiceServer};
@@ -14,8 +14,9 @@ use relay_proto::workspace::{
     CreateWorkspaceRequest, CreateWorkspaceResponse, GetWorkspaceRequest, GetWorkspaceResponse,
     IssueInvitationRequest, IssueInvitationResponse, JoinWorkspaceByInviteLinkRequest,
     JoinWorkspaceByInviteLinkResponse, ListChannelsRequest, ListChannelsResponse,
-    ListWorkspacesForUserRequest, ListWorkspacesForUserResponse, RemoveMemberRequest,
-    RemoveMemberResponse, RevokeInviteLinkRequest, RevokeInviteLinkResponse,
+    ListWorkspaceMembersRequest, ListWorkspaceMembersResponse, ListWorkspacesForUserRequest,
+    ListWorkspacesForUserResponse, RemoveMemberRequest, RemoveMemberResponse,
+    RevokeInviteLinkRequest, RevokeInviteLinkResponse,
 };
 use tonic::{Request, Response, Status, transport::Server};
 
@@ -180,6 +181,13 @@ impl WorkspaceService for MockWorkspaceService {
         Err(Status::unimplemented("mock"))
     }
 
+    async fn list_workspace_members(
+        &self,
+        _request: Request<ListWorkspaceMembersRequest>,
+    ) -> Result<Response<ListWorkspaceMembersResponse>, Status> {
+        Err(Status::unimplemented("mock"))
+    }
+
     async fn add_member(
         &self,
         _request: Request<AddMemberRequest>,
@@ -250,6 +258,13 @@ impl RealtimeService for MockRealtimeService {
         &self,
         _request: Request<DisconnectActorSessionsRequest>,
     ) -> Result<Response<DisconnectActorSessionsResponse>, Status> {
+        Err(Status::unimplemented("mock"))
+    }
+
+    async fn get_user_presence(
+        &self,
+        _request: Request<GetUserPresenceRequest>,
+    ) -> Result<Response<GetUserPresenceResponse>, Status> {
         Err(Status::unimplemented("mock"))
     }
 }

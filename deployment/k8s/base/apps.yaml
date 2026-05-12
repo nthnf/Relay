@@ -213,6 +213,8 @@ spec:
             - secretRef:
                 name: relay-runtime-secret
             - secretRef:
+                name: email-smtp-secret
+            - secretRef:
                 name: email-db-secret
           resources:
             requests:

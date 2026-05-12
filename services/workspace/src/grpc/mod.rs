@@ -6,6 +6,7 @@ pub mod authorize_channel_action;
 pub mod create_channel;
 pub mod create_invite_link;
 pub mod create_workspace;
+pub mod delete_workspace;
 pub mod get_workspace;
 pub mod handler;
 pub mod issue_invitation;
@@ -15,5 +16,6 @@ pub mod list_workspace_for_user;
 pub mod list_workspace_members;
 pub mod remove_member;
 pub mod revoke_invite_link;
+pub mod update_workspace;
 
 pub use handler::Handler as WorkspaceServer;

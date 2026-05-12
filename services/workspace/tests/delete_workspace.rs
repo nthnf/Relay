@@ -1,8 +1,8 @@
 extern crate workspace as workspace_crate;
 
 use relay_proto::workspace::workspace_service_client::WorkspaceServiceClient;
-use relay_proto::workspace::{CreateWorkspaceRequest, RemoveMemberRequest};
-use sea_orm::{ActiveValue::Set, ColumnTrait, Database, EntityTrait, QueryFilter};
+use relay_proto::workspace::{CreateWorkspaceRequest, DeleteWorkspaceRequest, GetWorkspaceRequest};
+use sea_orm::{ColumnTrait, Database, EntityTrait, QueryFilter};
 use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{core::IntoContainerPort, runners::AsyncRunner},
@@ -12,144 +12,19 @@ use uuid::Uuid;
 
 use migration::{Migrator, MigratorTrait};
 use workspace_crate::{
-    entity::{outbox_event, user_snapshot, workspace, workspace_member, workspace_member_role},
+    entity::{outbox_event, user_snapshot, workspace},
     grpc::WorkspaceServer,
 };
 
 const ACTOR_USER_ID_METADATA: &str = "x-user-id";
 
 #[tokio::test]
-async fn remove_member_soft_deletes_membership_and_roles() -> Result<(), Box<dyn std::error::Error>>
-{
-    let env = TestEnv::start().await?;
-    let actor_user_id = Uuid::new_v4();
-    let target_user_id = Uuid::new_v4();
-
-    insert_user_account(&env.db, actor_user_id).await?;
-    insert_user_account(&env.db, target_user_id).await?;
-
-    let created = env
-        .client
-        .clone()
-        .create_workspace(actor_request(
-            actor_user_id,
-            CreateWorkspaceRequest {
-                name: "Acme".to_string(),
-                first_channel_name: "general".to_string(),
-            },
-        ))
-        .await?
-        .into_inner();
-
-    env.client
-        .clone()
-        .add_member(actor_request(
-            actor_user_id,
-            relay_proto::workspace::AddMemberRequest {
-                workspace_id: created.workspace_id.clone(),
-                target_user_id: target_user_id.to_string(),
-            },
-        ))
-        .await?;
-
-    let removed = env
-        .client
-        .clone()
-        .remove_member(actor_request(
-            actor_user_id,
-            RemoveMemberRequest {
-                workspace_id: created.workspace_id.clone(),
-                target_user_id: target_user_id.to_string(),
-            },
-        ))
-        .await?
-        .into_inner();
-
-    assert!(removed.removed);
-    assert_eq!(removed.user_id, target_user_id.to_string());
-
-    let workspace_id = Uuid::parse_str(&created.workspace_id)?;
-
-    let target_member = workspace_member::Entity::find()
-        .filter(workspace_member::Column::WorkspaceId.eq(workspace_id))
-        .filter(workspace_member::Column::UserId.eq(target_user_id))
-        .one(&env.db)
-        .await?
-        .expect("member row");
-    assert_eq!(target_member.membership_status, "removed");
-    assert!(target_member.removed_at.is_some());
-
-    let target_roles = workspace_member_role::Entity::find()
-        .filter(workspace_member_role::Column::WorkspaceId.eq(workspace_id))
-        .filter(workspace_member_role::Column::UserId.eq(target_user_id))
-        .all(&env.db)
-        .await?;
-    assert!(target_roles.is_empty());
-
-    let removed_event = outbox_event::Entity::find()
-        .filter(outbox_event::Column::AggregateId.eq(workspace_id))
-        .filter(outbox_event::Column::EventType.eq("WorkspaceMemberRemoved".to_string()))
-        .one(&env.db)
-        .await?
-        .expect("removed event");
-    assert_eq!(removed_event.payload["user_id"], target_user_id.to_string());
-    assert_eq!(
-        removed_event.payload["removed_by_user_id"],
-        actor_user_id.to_string()
-    );
-
-    env.shutdown().await;
-    Ok(())
-}
-
-#[tokio::test]
-async fn remove_member_returns_false_for_missing_target() -> Result<(), Box<dyn std::error::Error>>
-{
-    let env = TestEnv::start().await?;
-    let actor_user_id = Uuid::new_v4();
-
-    insert_user_account(&env.db, actor_user_id).await?;
-
-    let created = env
-        .client
-        .clone()
-        .create_workspace(actor_request(
-            actor_user_id,
-            CreateWorkspaceRequest {
-                name: "Acme".to_string(),
-                first_channel_name: "general".to_string(),
-            },
-        ))
-        .await?
-        .into_inner();
-
-    let removed = env
-        .client
-        .clone()
-        .remove_member(actor_request(
-            actor_user_id,
-            RemoveMemberRequest {
-                workspace_id: created.workspace_id,
-                target_user_id: Uuid::new_v4().to_string(),
-            },
-        ))
-        .await?
-        .into_inner();
-
-    assert!(!removed.removed);
-    assert!(removed.removed_at.is_none());
-
-    env.shutdown().await;
-    Ok(())
-}
-
-#[tokio::test]
-async fn owner_leaving_last_membership_archives_workspace() -> Result<(), Box<dyn std::error::Error>>
-{
+async fn delete_workspace_archives_workspace_and_rejects_later_reads()
+-> Result<(), Box<dyn std::error::Error>> {
     let env = TestEnv::start().await?;
     let owner_user_id = Uuid::new_v4();
 
-    insert_user_account(&env.db, owner_user_id).await?;
+    insert_user_snapshot(&env.db, owner_user_id).await?;
 
     let created = env
         .client
@@ -164,21 +39,21 @@ async fn owner_leaving_last_membership_archives_workspace() -> Result<(), Box<dy
         .await?
         .into_inner();
 
-    let removed = env
+    let deleted = env
         .client
         .clone()
-        .remove_member(actor_request(
+        .delete_workspace(actor_request(
             owner_user_id,
-            RemoveMemberRequest {
+            DeleteWorkspaceRequest {
                 workspace_id: created.workspace_id.clone(),
-                target_user_id: owner_user_id.to_string(),
             },
         ))
         .await?
         .into_inner();
 
-    assert!(removed.removed);
-    assert_eq!(removed.user_id, owner_user_id.to_string());
+    assert_eq!(deleted.workspace_id, created.workspace_id);
+    assert!(deleted.deleted);
+    assert!(deleted.deleted_at.is_some());
 
     let workspace_id = Uuid::parse_str(&created.workspace_id)?;
     let workspace_row = workspace::Entity::find_by_id(workspace_id)
@@ -187,24 +62,77 @@ async fn owner_leaving_last_membership_archives_workspace() -> Result<(), Box<dy
         .expect("workspace row");
     assert!(workspace_row.archived_at.is_some());
 
-    let removed_event = outbox_event::Entity::find()
-        .filter(outbox_event::Column::AggregateId.eq(workspace_id))
-        .filter(outbox_event::Column::EventType.eq("WorkspaceMemberRemoved".to_string()))
-        .one(&env.db)
-        .await?
-        .expect("member removed event");
-    assert_eq!(removed_event.payload["reason"], "left");
-
-    let deleted_event = outbox_event::Entity::find()
+    let outbox_row = outbox_event::Entity::find()
+        .filter(outbox_event::Column::AggregateType.eq("workspace"))
         .filter(outbox_event::Column::AggregateId.eq(workspace_id))
         .filter(outbox_event::Column::EventType.eq("WorkspaceDeleted".to_string()))
         .one(&env.db)
         .await?
-        .expect("workspace deleted event");
+        .expect("workspace deleted outbox row");
+    assert_eq!(outbox_row.payload["workspace_id"], created.workspace_id);
     assert_eq!(
-        deleted_event.payload["deleted_by_user_id"],
+        outbox_row.payload["deleted_by_user_id"],
         owner_user_id.to_string()
     );
+
+    let error = env
+        .client
+        .clone()
+        .get_workspace(actor_request(
+            owner_user_id,
+            GetWorkspaceRequest {
+                workspace_id: created.workspace_id,
+            },
+        ))
+        .await
+        .expect_err("archived workspace should not be readable");
+    assert_eq!(error.code(), tonic::Code::NotFound);
+
+    env.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn delete_workspace_rejects_non_owner() -> Result<(), Box<dyn std::error::Error>> {
+    let env = TestEnv::start().await?;
+    let owner_user_id = Uuid::new_v4();
+    let other_user_id = Uuid::new_v4();
+
+    insert_user_snapshot(&env.db, owner_user_id).await?;
+    insert_user_snapshot(&env.db, other_user_id).await?;
+
+    let created = env
+        .client
+        .clone()
+        .create_workspace(actor_request(
+            owner_user_id,
+            CreateWorkspaceRequest {
+                name: "Acme".to_string(),
+                first_channel_name: "general".to_string(),
+            },
+        ))
+        .await?
+        .into_inner();
+
+    let error = env
+        .client
+        .clone()
+        .delete_workspace(actor_request(
+            other_user_id,
+            DeleteWorkspaceRequest {
+                workspace_id: created.workspace_id.clone(),
+            },
+        ))
+        .await
+        .expect_err("non-owner should not delete workspace");
+    assert_eq!(error.code(), tonic::Code::PermissionDenied);
+
+    let workspace_id = Uuid::parse_str(&created.workspace_id)?;
+    let workspace_row = workspace::Entity::find_by_id(workspace_id)
+        .one(&env.db)
+        .await?
+        .expect("workspace row");
+    assert!(workspace_row.archived_at.is_none());
 
     env.shutdown().await;
     Ok(())
@@ -289,19 +217,19 @@ fn actor_request<T>(user_id: Uuid, request: T) -> Request<T> {
     request
 }
 
-async fn insert_user_account(
+async fn insert_user_snapshot(
     db: &sea_orm::DatabaseConnection,
     user_id: Uuid,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let now = chrono::Utc::now();
-    user_snapshot::Entity::insert(user_snapshot::ActiveModel {
-        user_id: Set(user_id),
-        email_verified: Set(false),
-        username: Set(format!("user-{user_id}")),
-        display_name: Set("Test User".to_string()),
-        avatar_url: Set(None),
-        created_at: Set(now.into()),
-        updated_at: Set(now.into()),
+    workspace_crate::entity::user_snapshot::Entity::insert(user_snapshot::ActiveModel {
+        user_id: sea_orm::Set(user_id),
+        email_verified: sea_orm::Set(false),
+        username: sea_orm::Set(format!("user-{user_id}")),
+        display_name: sea_orm::Set("Test User".to_string()),
+        avatar_url: sea_orm::Set(None),
+        created_at: sea_orm::Set(now.into()),
+        updated_at: sea_orm::Set(now.into()),
     })
     .exec(db)
     .await?;

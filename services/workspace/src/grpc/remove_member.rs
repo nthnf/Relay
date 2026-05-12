@@ -1,7 +1,8 @@
 use chrono::Utc;
 use relay_proto::workspace::{RemoveMemberRequest, RemoveMemberResponse};
 use sea_orm::{
-    ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set, TransactionError, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter, Set,
+    TransactionError, TransactionTrait,
 };
 use tonic::{Request, Response, Status};
 use tracing::error;
@@ -9,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     entity::{outbox_event, workspace, workspace_member, workspace_member_role, workspace_role},
-    events::WorkspaceMemberRemovedPayload,
+    events::{WorkspaceDeletedPayload, WorkspaceMemberRemovedPayload},
 };
 
 use super::handler::Handler;
@@ -47,19 +48,35 @@ impl Handler {
                             Status::internal("Internal Server Error")
                         })?;
 
-                    match workspace {
-                        Some(workspace) => {
-                            if workspace.archived_at.is_some() {
+                    let workspace = match workspace {
+                        Some(workspace_model) => {
+                            if workspace_model.archived_at.is_some() {
                                 return Err(Status::failed_precondition("Invalid workspace"));
                             }
-                            if workspace.owner_user_id == target_user_id {
-                                return Err(Status::failed_precondition("Cannot remove owner"));
-                            }
+                            workspace_model
                         }
                         None => {
                             return Err(Status::not_found("Workspace not found"));
                         }
                     };
+
+                    let active_member_count = workspace_member::Entity::find()
+                        .filter(workspace_member::Column::WorkspaceId.eq(workspace_id))
+                        .filter(workspace_member::Column::MembershipStatus.eq("active"))
+                        .count(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "Workspace active member count failed");
+                            Status::internal("Internal Server Error")
+                        })?;
+
+                    if workspace.owner_user_id == target_user_id
+                        && !(actor_user_id == target_user_id && active_member_count == 1)
+                    {
+                        return Err(Status::failed_precondition(
+                            "Cannot remove owner before ownership transfer exists",
+                        ));
+                    }
 
                     // Check actor is active workspace member.
                     let actor_member = workspace_member::Entity::find()
@@ -166,6 +183,12 @@ impl Handler {
                             Status::internal("Internal Server Error")
                         })?;
 
+                    let removal_reason = if actor_user_id == target_user_id {
+                        "left"
+                    } else {
+                        "removed"
+                    };
+
                     // Insert workspace member removed event
                     let event = outbox_event::ActiveModel {
                         event_id: Set(Uuid::new_v4()),
@@ -186,7 +209,7 @@ impl Handler {
                             user_id: target_user_id.to_string(),
                             removed_at: now.to_rfc3339(),
                             removed_by_user_id: actor_user_id.to_string(),
-                            reason: "removed".to_string(),
+                            reason: removal_reason.to_string(),
                         })?),
                     };
                     outbox_event::Entity::insert(event)
@@ -196,6 +219,44 @@ impl Handler {
                             error!(error = %e, "Workspace member removed event insert failed");
                             Status::internal("Internal Server Error")
                         })?;
+
+                    let remaining_active_members = active_member_count.saturating_sub(1);
+                    if remaining_active_members == 0 {
+                        let mut active_workspace = workspace.into_active_model();
+                        active_workspace.archived_at = Set(Some(now.into()));
+                        active_workspace.updated_at = Set(now.into());
+                        active_workspace.update(txn).await.map_err(|e| {
+                            error!(error = %e, "Workspace auto-delete failed");
+                            Status::internal("Internal Server Error")
+                        })?;
+
+                        outbox_event::Entity::insert(outbox_event::ActiveModel {
+                            event_id: Set(Uuid::new_v4()),
+                            aggregate_type: Set("workspace".to_string()),
+                            aggregate_id: Set(workspace_id),
+                            event_type: Set("WorkspaceDeleted".to_string()),
+                            created_at: Set(now.into()),
+                            available_at: Set(now.into()),
+                            occurred_at: Set(now.into()),
+                            claimed_at: Set(None),
+                            claimed_by: Set(None),
+                            published_at: Set(None),
+                            last_error: Set(None),
+                            publish_attempts: Set(0),
+                            status: Set("pending".to_string()),
+                            payload: Set(payload_value(WorkspaceDeletedPayload {
+                                workspace_id: workspace_id.to_string(),
+                                deleted_by_user_id: actor_user_id.to_string(),
+                                deleted_at: now.to_rfc3339(),
+                            })?),
+                        })
+                        .exec(txn)
+                        .await
+                        .map_err(|e| {
+                            error!(error = %e, "Workspace auto-deleted event insert failed");
+                            Status::internal("Internal Server Error")
+                        })?;
+                    }
 
                     Ok(Response::new(RemoveMemberResponse {
                         removed: true,

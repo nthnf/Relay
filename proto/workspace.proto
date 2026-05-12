@@ -6,6 +6,8 @@ import "google/protobuf/timestamp.proto";
 
 service WorkspaceService {
   rpc CreateWorkspace(CreateWorkspaceRequest) returns (CreateWorkspaceResponse);
+  rpc UpdateWorkspace(UpdateWorkspaceRequest) returns (UpdateWorkspaceResponse);
+  rpc DeleteWorkspace(DeleteWorkspaceRequest) returns (DeleteWorkspaceResponse);
   rpc GetWorkspace(GetWorkspaceRequest) returns (GetWorkspaceResponse);
   rpc ListWorkspacesForUser(ListWorkspacesForUserRequest) returns (ListWorkspacesForUserResponse);
   rpc AuthorizeChannelAction(AuthorizeChannelActionRequest) returns (AuthorizeChannelActionResponse);
@@ -33,6 +35,30 @@ message CreateWorkspaceResponse {
   google.protobuf.Timestamp created_at = 4;
   string initial_member_user_id = 5;
   string first_channel_id = 6;
+}
+
+message UpdateWorkspaceRequest {
+  string workspace_id = 1;
+  optional string name = 2;
+  optional string icon_url = 3;
+}
+
+message UpdateWorkspaceResponse {
+  string workspace_id = 1;
+  string name = 2;
+  string owner_user_id = 3;
+  optional string icon_url = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+message DeleteWorkspaceRequest {
+  string workspace_id = 1;
+}
+
+message DeleteWorkspaceResponse {
+  string workspace_id = 1;
+  bool deleted = 2;
+  google.protobuf.Timestamp deleted_at = 3;
 }
 
 message WorkspaceRole {

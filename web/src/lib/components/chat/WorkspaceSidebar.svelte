@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { Hash, Plus, Search, UserPlus } from '@lucide/svelte';
+	import { Hash, Plus, Search, Settings, UserPlus } from '@lucide/svelte';
 	import SecondarySidebar from './SecondarySidebar.svelte';
 
 	type Channel = {
@@ -8,6 +8,7 @@
 		routeId?: string;
 		name: string;
 		channelKind?: string;
+		unreadCount?: number;
 	};
 
 	type Workspace = {
@@ -43,11 +44,16 @@
 			<a href={resolve(firstChannelRouteId ? `/workspace/${workspaceRouteId}/${firstChannelRouteId}` : `/workspace/${workspaceRouteId}`)} class="min-w-0 flex-1">
 				<p class="truncate text-xl font-semibold tracking-[-0.04em] text-snow">{workspace.name}</p>
 			</a>
-			{#if onAddMember}
-				<button class="grid h-7 w-7 shrink-0 place-items-center rounded-full text-parchment transition hover:bg-warm-charcoal/60 hover:text-mint" type="button" onclick={onAddMember} aria-label="Add workspace member">
-					<UserPlus size={16} strokeWidth={2.2} />
-				</button>
-			{/if}
+			<div class="flex shrink-0 items-center gap-1">
+				{#if onAddMember}
+					<button class="grid h-7 w-7 place-items-center rounded-full text-parchment transition hover:bg-warm-charcoal/60 hover:text-mint" type="button" onclick={onAddMember} aria-label="Add workspace member">
+						<UserPlus size={16} strokeWidth={2.2} />
+					</button>
+				{/if}
+				<a class="grid h-7 w-7 place-items-center rounded-full text-parchment transition hover:bg-warm-charcoal/60 hover:text-mint" href={resolve(`/workspace/${workspaceRouteId}/settings`)} aria-label="Workspace settings">
+					<Settings size={16} strokeWidth={2.2} />
+				</a>
+			</div>
 		</div>
 		<a href={resolve(firstChannelRouteId ? `/workspace/${workspaceRouteId}/${firstChannelRouteId}` : `/workspace/${workspaceRouteId}`)} class="block">
 			<p class="mt-1.5 text-xs text-parchment">Engineering channels</p>
@@ -79,8 +85,12 @@
 				class={['flex items-center gap-2.5 rounded-md px-1 py-2.5 font-[Inter,system-ui,sans-serif] text-xs font-semibold leading-tight text-parchment transition hover:bg-chat-main hover:text-snow', activeChannelId === channel.channelId && 'bg-chat-main text-snow']}
 				href={resolve(`/workspace/${workspaceRouteId}/${channel.routeId ?? channel.channelId}`)}
 			>
-				<span class="h-1.5 w-1.5 rounded-full bg-signal"></span>
-				<Hash size={16} strokeWidth={2.4} class="text-snow" />
+				<span class="relative grid h-4 w-4 shrink-0 place-items-center">
+					<Hash size={16} strokeWidth={2.4} class="text-snow" />
+					{#if (channel.unreadCount ?? 0) > 0}
+						<i class="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-signal" aria-label={`${channel.unreadCount} unread channel messages`}></i>
+					{/if}
+				</span>
 				<span class="truncate">{channel.name}</span>
 			</a>
 		{/each}

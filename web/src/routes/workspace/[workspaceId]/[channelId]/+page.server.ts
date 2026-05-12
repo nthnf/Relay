@@ -1,23 +1,30 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 
-import { getBootstrapClient, getChatClient, getIdentityClient, grpcErrorToHttp, metadataFromRequest } from '$lib/grpc/client.server';
+import { getBootstrapClient, getChatClient, getIdentityClient, getWorkspaceClient, grpcErrorToHttp, metadataFromRequest } from '$lib/grpc/client.server';
 import { decodeRouteId, encodeRouteId } from '$lib/server/route-ids';
 
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params, request, cookies }) => {
+export const load: PageServerLoad = async ({ params, request, cookies, url }) => {
 	const workspaceId = decodeParam(params.workspaceId);
 	const channelId = decodeParam(params.channelId);
+	const seededConversationId = url.searchParams.get('conversationId')?.trim();
 	const metadata = metadataFromRequest(request.headers, cookies);
 
 	try {
-		const workspaceBootstrap = await getBootstrapClient().getWorkspaceBootstrap(
-			{ workspaceId },
-			{ metadata }
-		);
-		const channel = workspaceBootstrap.channels.find((item) => item.channelId === channelId);
+		const workspaceBootstrap = await waitForWorkspaceChannel(workspaceId, channelId, metadata);
+		let channel = workspaceBootstrap.channels.find((item) => item.channelId === channelId);
+		let workspace = workspaceBootstrap.workspace;
+		let channels = workspaceBootstrap.channels;
 
-		if (!workspaceBootstrap.workspace || !channel) {
+		if ((!workspace || !channel?.conversationId) && seededConversationId) {
+			const fallback = await loadWorkspaceChannelFallback(workspaceId, channelId, seededConversationId, metadata);
+			workspace = fallback.workspace;
+			channel = fallback.channel;
+			channels = fallback.channels;
+		}
+
+		if (!workspace || !channel?.conversationId) {
 			error(404, 'Workspace channel not found');
 		}
 
@@ -32,10 +39,10 @@ export const load: PageServerLoad = async ({ params, request, cookies }) => {
 		);
 
 		return {
-			workspace: workspaceBootstrap.workspace,
+			workspace,
 			workspaceRouteId: params.workspaceId,
 			channel,
-			channels: workspaceBootstrap.channels.map((item) => ({ ...item, routeId: encodeRouteId(item.channelId) })),
+			channels: channels.map((item) => ({ ...item, routeId: encodeRouteId(item.channelId) })),
 			messages,
 			authorProfiles
 		};
@@ -124,6 +131,49 @@ function decodeParam(value: string): string {
 	}
 }
 
+async function loadWorkspaceChannelFallback(
+	workspaceId: string,
+	channelId: string,
+	conversationId: string,
+	metadata: ReturnType<typeof metadataFromRequest>
+) {
+	const [workspaceDetails, channelList] = await Promise.all([
+		getWorkspaceClient().getWorkspace({ workspaceId }, { metadata }),
+		getWorkspaceClient().listChannels({ workspaceId }, { metadata })
+	]);
+	const channel = channelList.channels.find((item) => item.channelId === channelId);
+
+	if (!channel) {
+		error(404, 'Workspace channel not found');
+	}
+
+	return {
+		workspace: {
+			workspaceId: workspaceDetails.workspaceId,
+			name: workspaceDetails.name,
+			iconUrl: undefined,
+			memberCount: workspaceDetails.memberCount,
+			unreadCount: 0
+		},
+		channel: {
+			channelId: channel.channelId,
+			conversationId,
+			name: channel.name,
+			channelKind: channel.channelKind,
+			position: channel.position,
+			unreadCount: 0
+		},
+		channels: channelList.channels.map((item) => ({
+			channelId: item.channelId,
+			conversationId: item.channelId === channelId ? conversationId : '',
+			name: item.name,
+			channelKind: item.channelKind,
+			position: item.position,
+			unreadCount: 0
+		}))
+	};
+}
+
 async function loadAuthorProfiles(
 	authorUserIds: string[],
 	metadata: ReturnType<typeof metadataFromRequest>
@@ -136,4 +186,23 @@ async function loadAuthorProfiles(
 
 	const response = await getIdentityClient().getUsersByIds({ userIds }, { metadata });
 	return response.users;
+}
+
+async function waitForWorkspaceChannel(
+	workspaceId: string,
+	channelId: string,
+	metadata: ReturnType<typeof metadataFromRequest>
+) {
+	for (let attempt = 0; attempt < 30; attempt += 1) {
+		const latest = await getBootstrapClient().getWorkspaceBootstrap({ workspaceId }, { metadata });
+		const channel = latest.channels.find((item) => item.channelId === channelId);
+
+		if (channel?.conversationId) {
+			return latest;
+		}
+
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+
+	return getBootstrapClient().getWorkspaceBootstrap({ workspaceId }, { metadata });
 }

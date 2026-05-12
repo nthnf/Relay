@@ -3,12 +3,14 @@ use std::sync::Arc;
 use crate::{
     entity::{workspace_channel_snapshot, workspace_member_snapshot, workspace_snapshot},
     events::{
-        WorkspaceChannelCreatedPayload, WorkspaceCreatedPayload, WorkspaceMemberAddedPayload,
-        WorkspaceMemberRemovedPayload,
+        WorkspaceChannelCreatedPayload, WorkspaceCreatedPayload, WorkspaceDeletedPayload,
+        WorkspaceMemberAddedPayload, WorkspaceMemberRemovedPayload, WorkspaceUpdatedPayload,
     },
 };
 use relay_amqp::{DeliveryContext, EventHandleResult, RegisteredSubscriber, route};
-use sea_orm::{ActiveModelTrait, EntityTrait, IntoActiveModel, Set, TransactionTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set, TransactionTrait,
+};
 
 use super::handler::{ComposeWork, Handler};
 
@@ -173,6 +175,107 @@ impl Handler {
             })
             .await
             .map_err(|error| Self::tx_error("workspace member added transaction", error))?;
+
+        Ok(())
+    }
+
+    pub async fn handle_workspace_updated(
+        self: Arc<Self>,
+        delivery: DeliveryContext,
+        payload: WorkspaceUpdatedPayload,
+    ) -> EventHandleResult {
+        let WorkspaceUpdatedPayload {
+            workspace_id,
+            name,
+            icon_url,
+            updated_by_user_id: _,
+            updated_at,
+        } = payload;
+        let parsed_workspace_id = Self::parse_uuid("workspace_id", &workspace_id)?;
+        let updated_at = Self::parse_timestamp("updated_at", &updated_at)?;
+
+        self.db
+            .transaction::<_, (), relay_amqp::EventHandleError>(|txn| {
+                Box::pin(async move {
+                    if !Self::mark_event_processed(txn, &delivery, &workspace_id).await? {
+                        return Ok(());
+                    }
+
+                    match workspace_snapshot::Entity::find_by_id(parsed_workspace_id)
+                        .one(txn)
+                        .await
+                        .map_err(|error| Self::db_error("workspace snapshot lookup", error))?
+                    {
+                        Some(existing) => {
+                            let mut active = existing.into_active_model();
+                            active.name = Set(name);
+                            active.icon_url = Set(icon_url);
+                            active.updated_at = Set(updated_at);
+                            active.update(txn).await.map_err(|error| {
+                                Self::db_error("workspace snapshot update", error)
+                            })?;
+                        }
+                        None => return Ok(()),
+                    }
+
+                    Self::enqueue_compose(txn, ComposeWork::workspace(None, parsed_workspace_id))
+                        .await?;
+
+                    Ok(())
+                })
+            })
+            .await
+            .map_err(|error| Self::tx_error("workspace updated transaction", error))?;
+
+        Ok(())
+    }
+
+    pub async fn handle_workspace_deleted(
+        self: Arc<Self>,
+        delivery: DeliveryContext,
+        payload: WorkspaceDeletedPayload,
+    ) -> EventHandleResult {
+        let WorkspaceDeletedPayload {
+            workspace_id,
+            deleted_by_user_id: _,
+            deleted_at: _,
+        } = payload;
+        let parsed_workspace_id = Self::parse_uuid("workspace_id", &workspace_id)?;
+
+        self.db
+            .transaction::<_, (), relay_amqp::EventHandleError>(|txn| {
+                Box::pin(async move {
+                    if !Self::mark_event_processed(txn, &delivery, &workspace_id).await? {
+                        return Ok(());
+                    }
+
+                    workspace_channel_snapshot::Entity::delete_many()
+                        .filter(
+                            workspace_channel_snapshot::Column::WorkspaceId.eq(parsed_workspace_id),
+                        )
+                        .exec(txn)
+                        .await
+                        .map_err(|error| {
+                            Self::db_error("workspace channel snapshot delete", error)
+                        })?;
+                    workspace_snapshot::Entity::delete_by_id(parsed_workspace_id)
+                        .exec(txn)
+                        .await
+                        .map_err(|error| Self::db_error("workspace snapshot delete", error))?;
+
+                    Self::enqueue_compose(txn, ComposeWork::workspace(None, parsed_workspace_id))
+                        .await?;
+                    Self::enqueue_compose(
+                        txn,
+                        ComposeWork::workspace_channel(None, Some(parsed_workspace_id), None, None),
+                    )
+                    .await?;
+
+                    Ok(())
+                })
+            })
+            .await
+            .map_err(|error| Self::tx_error("workspace deleted transaction", error))?;
 
         Ok(())
     }
@@ -349,6 +452,14 @@ pub(super) fn register(subscriber: RegisteredSubscriber<Handler>) -> RegisteredS
         .event(
             "workspace.WorkspaceCreated",
             route(Handler::handle_workspace_created),
+        )
+        .event(
+            "workspace.WorkspaceUpdated",
+            route(Handler::handle_workspace_updated),
+        )
+        .event(
+            "workspace.WorkspaceDeleted",
+            route(Handler::handle_workspace_deleted),
         )
         .event(
             "workspace.WorkspaceMemberAdded",

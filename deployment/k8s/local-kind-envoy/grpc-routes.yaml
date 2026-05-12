@@ -58,6 +58,25 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: GRPCRoute
 metadata:
+  name: friendship-grpc
+  namespace: relay
+  labels:
+    app.kubernetes.io/name: friendship
+    app.kubernetes.io/part-of: relay
+spec:
+  parentRefs:
+    - name: relay-gateway
+      sectionName: grpc
+  hostnames:
+    - friendship.local
+  rules:
+    - backendRefs:
+        - name: friendship
+          port: 50051
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
   name: workspace-grpc
   namespace: relay
   labels:

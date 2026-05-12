@@ -2,12 +2,13 @@ use relay_proto::workspace::{
     AcceptInvitationRequest, AcceptInvitationResponse, AddMemberRequest, AddMemberResponse,
     AuthorizeChannelActionRequest, AuthorizeChannelActionResponse, CreateChannelRequest,
     CreateChannelResponse, CreateInviteLinkRequest, CreateInviteLinkResponse,
-    CreateWorkspaceRequest, CreateWorkspaceResponse, GetWorkspaceRequest, GetWorkspaceResponse,
-    IssueInvitationRequest, IssueInvitationResponse, JoinWorkspaceByInviteLinkRequest,
-    JoinWorkspaceByInviteLinkResponse, ListChannelsRequest, ListChannelsResponse,
-    ListWorkspaceMembersRequest, ListWorkspaceMembersResponse, ListWorkspacesForUserRequest,
-    ListWorkspacesForUserResponse, RemoveMemberRequest, RemoveMemberResponse,
-    RevokeInviteLinkRequest, RevokeInviteLinkResponse,
+    CreateWorkspaceRequest, CreateWorkspaceResponse, DeleteWorkspaceRequest,
+    DeleteWorkspaceResponse, GetWorkspaceRequest, GetWorkspaceResponse, IssueInvitationRequest,
+    IssueInvitationResponse, JoinWorkspaceByInviteLinkRequest, JoinWorkspaceByInviteLinkResponse,
+    ListChannelsRequest, ListChannelsResponse, ListWorkspaceMembersRequest,
+    ListWorkspaceMembersResponse, ListWorkspacesForUserRequest, ListWorkspacesForUserResponse,
+    RemoveMemberRequest, RemoveMemberResponse, RevokeInviteLinkRequest, RevokeInviteLinkResponse,
+    UpdateWorkspaceRequest, UpdateWorkspaceResponse,
     workspace_service_server::{WorkspaceService, WorkspaceServiceServer},
 };
 use sea_orm::DatabaseConnection;
@@ -35,6 +36,20 @@ impl WorkspaceService for Handler {
         request: Request<CreateWorkspaceRequest>,
     ) -> Result<Response<CreateWorkspaceResponse>, Status> {
         self.create_workspace(request).await
+    }
+
+    async fn update_workspace(
+        &self,
+        request: Request<UpdateWorkspaceRequest>,
+    ) -> Result<Response<UpdateWorkspaceResponse>, Status> {
+        self.update_workspace(request).await
+    }
+
+    async fn delete_workspace(
+        &self,
+        request: Request<DeleteWorkspaceRequest>,
+    ) -> Result<Response<DeleteWorkspaceResponse>, Status> {
+        self.delete_workspace(request).await
     }
 
     async fn get_workspace(

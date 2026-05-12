@@ -37,6 +37,9 @@ impl Handler {
                     let Some(workspace) = workspace else {
                         return Err(Status::not_found("Workspace not found"));
                     };
+                    if workspace.archived_at.is_some() {
+                        return Err(Status::not_found("Workspace not found"));
+                    }
 
                     // Check actor is member
                     let member = workspace_member::Entity::find()

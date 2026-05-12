@@ -64,6 +64,30 @@ export interface CreateWorkspaceResponse {
   firstChannelId: string;
 }
 
+export interface UpdateWorkspaceRequest {
+  workspaceId: string;
+  name?: string | undefined;
+  iconUrl?: string | undefined;
+}
+
+export interface UpdateWorkspaceResponse {
+  workspaceId: string;
+  name: string;
+  ownerUserId: string;
+  iconUrl?: string | undefined;
+  updatedAt: Date | undefined;
+}
+
+export interface DeleteWorkspaceRequest {
+  workspaceId: string;
+}
+
+export interface DeleteWorkspaceResponse {
+  workspaceId: string;
+  deleted: boolean;
+  deletedAt: Date | undefined;
+}
+
 export interface WorkspaceRole {
   workspaceRoleId: string;
   workspaceId: string;
@@ -502,6 +526,410 @@ export const CreateWorkspaceResponse: MessageFns<CreateWorkspaceResponse> = {
     message.createdAt = object.createdAt ?? undefined;
     message.initialMemberUserId = object.initialMemberUserId ?? "";
     message.firstChannelId = object.firstChannelId ?? "";
+    return message;
+  },
+};
+
+function createBaseUpdateWorkspaceRequest(): UpdateWorkspaceRequest {
+  return { workspaceId: "", name: undefined, iconUrl: undefined };
+}
+
+export const UpdateWorkspaceRequest: MessageFns<UpdateWorkspaceRequest> = {
+  encode(message: UpdateWorkspaceRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.workspaceId !== "") {
+      writer.uint32(10).string(message.workspaceId);
+    }
+    if (message.name !== undefined) {
+      writer.uint32(18).string(message.name);
+    }
+    if (message.iconUrl !== undefined) {
+      writer.uint32(26).string(message.iconUrl);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): UpdateWorkspaceRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseUpdateWorkspaceRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.workspaceId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.iconUrl = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): UpdateWorkspaceRequest {
+    return {
+      workspaceId: isSet(object.workspaceId)
+        ? globalThis.String(object.workspaceId)
+        : isSet(object.workspace_id)
+        ? globalThis.String(object.workspace_id)
+        : "",
+      name: isSet(object.name) ? globalThis.String(object.name) : undefined,
+      iconUrl: isSet(object.iconUrl)
+        ? globalThis.String(object.iconUrl)
+        : isSet(object.icon_url)
+        ? globalThis.String(object.icon_url)
+        : undefined,
+    };
+  },
+
+  toJSON(message: UpdateWorkspaceRequest): unknown {
+    const obj: any = {};
+    if (message.workspaceId !== "") {
+      obj.workspaceId = message.workspaceId;
+    }
+    if (message.name !== undefined) {
+      obj.name = message.name;
+    }
+    if (message.iconUrl !== undefined) {
+      obj.iconUrl = message.iconUrl;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<UpdateWorkspaceRequest>): UpdateWorkspaceRequest {
+    return UpdateWorkspaceRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<UpdateWorkspaceRequest>): UpdateWorkspaceRequest {
+    const message = createBaseUpdateWorkspaceRequest();
+    message.workspaceId = object.workspaceId ?? "";
+    message.name = object.name ?? undefined;
+    message.iconUrl = object.iconUrl ?? undefined;
+    return message;
+  },
+};
+
+function createBaseUpdateWorkspaceResponse(): UpdateWorkspaceResponse {
+  return { workspaceId: "", name: "", ownerUserId: "", iconUrl: undefined, updatedAt: undefined };
+}
+
+export const UpdateWorkspaceResponse: MessageFns<UpdateWorkspaceResponse> = {
+  encode(message: UpdateWorkspaceResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.workspaceId !== "") {
+      writer.uint32(10).string(message.workspaceId);
+    }
+    if (message.name !== "") {
+      writer.uint32(18).string(message.name);
+    }
+    if (message.ownerUserId !== "") {
+      writer.uint32(26).string(message.ownerUserId);
+    }
+    if (message.iconUrl !== undefined) {
+      writer.uint32(34).string(message.iconUrl);
+    }
+    if (message.updatedAt !== undefined) {
+      Timestamp.encode(toTimestamp(message.updatedAt), writer.uint32(42).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): UpdateWorkspaceResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseUpdateWorkspaceResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.workspaceId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.ownerUserId = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.iconUrl = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.updatedAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): UpdateWorkspaceResponse {
+    return {
+      workspaceId: isSet(object.workspaceId)
+        ? globalThis.String(object.workspaceId)
+        : isSet(object.workspace_id)
+        ? globalThis.String(object.workspace_id)
+        : "",
+      name: isSet(object.name) ? globalThis.String(object.name) : "",
+      ownerUserId: isSet(object.ownerUserId)
+        ? globalThis.String(object.ownerUserId)
+        : isSet(object.owner_user_id)
+        ? globalThis.String(object.owner_user_id)
+        : "",
+      iconUrl: isSet(object.iconUrl)
+        ? globalThis.String(object.iconUrl)
+        : isSet(object.icon_url)
+        ? globalThis.String(object.icon_url)
+        : undefined,
+      updatedAt: isSet(object.updatedAt)
+        ? fromJsonTimestamp(object.updatedAt)
+        : isSet(object.updated_at)
+        ? fromJsonTimestamp(object.updated_at)
+        : undefined,
+    };
+  },
+
+  toJSON(message: UpdateWorkspaceResponse): unknown {
+    const obj: any = {};
+    if (message.workspaceId !== "") {
+      obj.workspaceId = message.workspaceId;
+    }
+    if (message.name !== "") {
+      obj.name = message.name;
+    }
+    if (message.ownerUserId !== "") {
+      obj.ownerUserId = message.ownerUserId;
+    }
+    if (message.iconUrl !== undefined) {
+      obj.iconUrl = message.iconUrl;
+    }
+    if (message.updatedAt !== undefined) {
+      obj.updatedAt = message.updatedAt.toISOString();
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<UpdateWorkspaceResponse>): UpdateWorkspaceResponse {
+    return UpdateWorkspaceResponse.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<UpdateWorkspaceResponse>): UpdateWorkspaceResponse {
+    const message = createBaseUpdateWorkspaceResponse();
+    message.workspaceId = object.workspaceId ?? "";
+    message.name = object.name ?? "";
+    message.ownerUserId = object.ownerUserId ?? "";
+    message.iconUrl = object.iconUrl ?? undefined;
+    message.updatedAt = object.updatedAt ?? undefined;
+    return message;
+  },
+};
+
+function createBaseDeleteWorkspaceRequest(): DeleteWorkspaceRequest {
+  return { workspaceId: "" };
+}
+
+export const DeleteWorkspaceRequest: MessageFns<DeleteWorkspaceRequest> = {
+  encode(message: DeleteWorkspaceRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.workspaceId !== "") {
+      writer.uint32(10).string(message.workspaceId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DeleteWorkspaceRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseDeleteWorkspaceRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.workspaceId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): DeleteWorkspaceRequest {
+    return {
+      workspaceId: isSet(object.workspaceId)
+        ? globalThis.String(object.workspaceId)
+        : isSet(object.workspace_id)
+        ? globalThis.String(object.workspace_id)
+        : "",
+    };
+  },
+
+  toJSON(message: DeleteWorkspaceRequest): unknown {
+    const obj: any = {};
+    if (message.workspaceId !== "") {
+      obj.workspaceId = message.workspaceId;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<DeleteWorkspaceRequest>): DeleteWorkspaceRequest {
+    return DeleteWorkspaceRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<DeleteWorkspaceRequest>): DeleteWorkspaceRequest {
+    const message = createBaseDeleteWorkspaceRequest();
+    message.workspaceId = object.workspaceId ?? "";
+    return message;
+  },
+};
+
+function createBaseDeleteWorkspaceResponse(): DeleteWorkspaceResponse {
+  return { workspaceId: "", deleted: false, deletedAt: undefined };
+}
+
+export const DeleteWorkspaceResponse: MessageFns<DeleteWorkspaceResponse> = {
+  encode(message: DeleteWorkspaceResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.workspaceId !== "") {
+      writer.uint32(10).string(message.workspaceId);
+    }
+    if (message.deleted !== false) {
+      writer.uint32(16).bool(message.deleted);
+    }
+    if (message.deletedAt !== undefined) {
+      Timestamp.encode(toTimestamp(message.deletedAt), writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DeleteWorkspaceResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseDeleteWorkspaceResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.workspaceId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.deleted = reader.bool();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.deletedAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): DeleteWorkspaceResponse {
+    return {
+      workspaceId: isSet(object.workspaceId)
+        ? globalThis.String(object.workspaceId)
+        : isSet(object.workspace_id)
+        ? globalThis.String(object.workspace_id)
+        : "",
+      deleted: isSet(object.deleted) ? globalThis.Boolean(object.deleted) : false,
+      deletedAt: isSet(object.deletedAt)
+        ? fromJsonTimestamp(object.deletedAt)
+        : isSet(object.deleted_at)
+        ? fromJsonTimestamp(object.deleted_at)
+        : undefined,
+    };
+  },
+
+  toJSON(message: DeleteWorkspaceResponse): unknown {
+    const obj: any = {};
+    if (message.workspaceId !== "") {
+      obj.workspaceId = message.workspaceId;
+    }
+    if (message.deleted !== false) {
+      obj.deleted = message.deleted;
+    }
+    if (message.deletedAt !== undefined) {
+      obj.deletedAt = message.deletedAt.toISOString();
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<DeleteWorkspaceResponse>): DeleteWorkspaceResponse {
+    return DeleteWorkspaceResponse.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<DeleteWorkspaceResponse>): DeleteWorkspaceResponse {
+    const message = createBaseDeleteWorkspaceResponse();
+    message.workspaceId = object.workspaceId ?? "";
+    message.deleted = object.deleted ?? false;
+    message.deletedAt = object.deletedAt ?? undefined;
     return message;
   },
 };
@@ -3884,6 +4312,22 @@ export const WorkspaceServiceDefinition = {
       responseStream: false,
       options: {},
     },
+    updateWorkspace: {
+      name: "UpdateWorkspace",
+      requestType: UpdateWorkspaceRequest as typeof UpdateWorkspaceRequest,
+      requestStream: false,
+      responseType: UpdateWorkspaceResponse as typeof UpdateWorkspaceResponse,
+      responseStream: false,
+      options: {},
+    },
+    deleteWorkspace: {
+      name: "DeleteWorkspace",
+      requestType: DeleteWorkspaceRequest as typeof DeleteWorkspaceRequest,
+      requestStream: false,
+      responseType: DeleteWorkspaceResponse as typeof DeleteWorkspaceResponse,
+      responseStream: false,
+      options: {},
+    },
     getWorkspace: {
       name: "GetWorkspace",
       requestType: GetWorkspaceRequest as typeof GetWorkspaceRequest,
@@ -3996,6 +4440,14 @@ export interface WorkspaceServiceImplementation<CallContextExt = {}> {
     request: CreateWorkspaceRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<CreateWorkspaceResponse>>;
+  updateWorkspace(
+    request: UpdateWorkspaceRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<UpdateWorkspaceResponse>>;
+  deleteWorkspace(
+    request: DeleteWorkspaceRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<DeleteWorkspaceResponse>>;
   getWorkspace(
     request: GetWorkspaceRequest,
     context: CallContext & CallContextExt,
@@ -4052,6 +4504,14 @@ export interface WorkspaceServiceClient<CallOptionsExt = {}> {
     request: DeepPartial<CreateWorkspaceRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<CreateWorkspaceResponse>;
+  updateWorkspace(
+    request: DeepPartial<UpdateWorkspaceRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<UpdateWorkspaceResponse>;
+  deleteWorkspace(
+    request: DeepPartial<DeleteWorkspaceRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<DeleteWorkspaceResponse>;
   getWorkspace(
     request: DeepPartial<GetWorkspaceRequest>,
     options?: CallOptions & CallOptionsExt,

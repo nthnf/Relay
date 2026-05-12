@@ -18,21 +18,23 @@
 		data.messages.messages.map((message) => ({
 			...message,
 			senderName: authorNames.get(message.authorUserId) ?? 'Unknown user',
-			outgoing: message.authorUserId !== data.thread.peerUserId
+			outgoing: Boolean(data.sidebar?.viewer?.userId) && message.authorUserId === data.sidebar?.viewer?.userId
 		}))
 	);
 	let lastReadSeq = $derived(data.messages.messages.at(-1)?.conversationMessageSeq);
 
-	function markConversationRead() {
+	async function markConversationRead() {
 		if (!data.thread.conversationId || lastReadSeq === undefined) {
 			return;
 		}
 
-		void fetch(`/api/conversations/${data.thread.conversationId}/read`, {
+		await fetch(`/api/conversations/${data.thread.conversationId}/read`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ lastReadConversationMessageSeq: Number(lastReadSeq) })
 		}).catch(() => undefined);
+
+		setTimeout(() => void invalidateAll(), 250);
 	}
 
 	onMount(() => {

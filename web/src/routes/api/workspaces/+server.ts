@@ -47,7 +47,7 @@ async function createChannelConversation(
 ) {
 	let lastCause: unknown;
 
-	for (let attempt = 0; attempt < 6; attempt += 1) {
+	for (let attempt = 0; attempt < 30; attempt += 1) {
 		try {
 			await getChatClient().createConversation(
 				{ targetType: 2, workspaceChannelId: channelId },
@@ -60,8 +60,8 @@ async function createChannelConversation(
 			}
 
 			lastCause = cause;
-			await new Promise((resolve) => setTimeout(resolve, 150));
-		}
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
 	}
 
 	throw lastCause;

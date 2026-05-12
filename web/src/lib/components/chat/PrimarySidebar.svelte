@@ -6,6 +6,7 @@
 		routeId: string;
 		firstChannelRouteId?: string;
 		name: string;
+		unreadCount?: number;
 	};
 
 	type DmItem = {
@@ -13,6 +14,7 @@
 		routeId: string;
 		peerDisplayName?: string;
 		peerUsername?: string;
+		unreadCount?: number;
 	};
 
 	type Viewer = {
@@ -33,7 +35,7 @@
 		activeWorkspaceId
 	}: { sidebar: SidebarData | null; active?: 'workspace' | 'dm' | 'friend'; activeWorkspaceId?: string } = $props();
 
-	const serverAvatars = ['R', 'OK', 'C', 'M'];
+	const dmUnreadCount = $derived(sidebar?.dms.reduce((total, dm) => total + (dm.unreadCount ?? 0), 0) ?? 0);
 </script>
 
 <aside class="hidden h-screen w-[4.5rem] shrink-0 flex-col border-r border-warm-charcoal bg-abyss md:flex">
@@ -49,10 +51,15 @@
 		<nav class="mt-6 flex w-full flex-col items-center gap-4 text-parchment" aria-label="Primary navigation">
 			<a
 				class={['relative flex w-full flex-col items-center gap-1 font-[Inter,system-ui,sans-serif] text-[0.65rem] font-medium leading-tight transition hover:text-snow', active === 'dm' && 'text-snow']}
-				href={sidebar?.dms[0] ? `/dm/${sidebar.dms[0].routeId}` : '/friends'}
+				href="/dm"
 				aria-label="DMs"
 			>
-				<span class={['grid h-9 w-9 place-items-center rounded-full border bg-carbon text-snow', active === 'dm' ? 'border-signal' : 'border-warm-charcoal']}><MessageCircle size={17} strokeWidth={2.2} /></span>
+				<span class={['relative grid h-9 w-9 place-items-center rounded-full border bg-carbon text-snow', active === 'dm' ? 'border-signal' : 'border-warm-charcoal']}>
+					<MessageCircle size={17} strokeWidth={2.2} />
+					{#if dmUnreadCount > 0}
+						<i class="absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-abyss bg-signal" aria-label={`${dmUnreadCount} unread direct messages`}></i>
+					{/if}
+				</span>
 				<span>DMs</span>
 			</a>
 			<a
@@ -68,21 +75,18 @@
 		<div class="my-5 h-px w-10 bg-warm-charcoal"></div>
 
 		<div class="flex min-h-0 w-full flex-1 flex-col items-center gap-3 overflow-y-auto px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-			{#if sidebar?.workspaces.length}
-				{#each sidebar.workspaces as workspace, index (workspace.workspaceId)}
-					<a
-						class={['relative grid h-10 w-10 place-items-center rounded-full border border-warm-charcoal bg-[radial-gradient(circle_at_35%_20%,var(--color-mint),var(--color-carbon)_62%)] font-[system-ui,sans-serif] text-[0.65rem] font-bold leading-none text-snow transition hover:border-signal', active === 'workspace' && (workspace.workspaceId === activeWorkspaceId || (!activeWorkspaceId && index === 0)) && 'before:absolute before:-left-4 before:h-8 before:w-1 before:rounded-r-full before:bg-signal']}
-						href={workspace.firstChannelRouteId ? `/workspace/${workspace.routeId}/${workspace.firstChannelRouteId}` : `/workspace/${workspace.routeId}`}
-						aria-label={workspace.name}
-					>
-						<span>{workspace.name.slice(0, 2).toUpperCase()}</span>
-					</a>
-				{/each}
-			{:else}
-				{#each serverAvatars as avatar (avatar)}
-					<div class="grid h-10 w-10 place-items-center rounded-full border border-warm-charcoal bg-carbon font-[system-ui,sans-serif] text-[0.65rem] font-bold leading-none text-steel"><span>{avatar}</span></div>
-				{/each}
-			{/if}
+			{#each sidebar?.workspaces ?? [] as workspace, index (workspace.workspaceId)}
+				<a
+					class={['relative grid h-10 w-10 place-items-center rounded-full border border-warm-charcoal bg-[radial-gradient(circle_at_35%_20%,var(--color-mint),var(--color-carbon)_62%)] font-[system-ui,sans-serif] text-[0.65rem] font-bold leading-none text-snow transition hover:border-signal', active === 'workspace' && (workspace.workspaceId === activeWorkspaceId || (!activeWorkspaceId && index === 0)) && 'before:absolute before:-left-4 before:h-8 before:w-1 before:rounded-r-full before:bg-signal']}
+					href={workspace.firstChannelRouteId ? `/workspace/${workspace.routeId}/${workspace.firstChannelRouteId}` : `/workspace/${workspace.routeId}`}
+					aria-label={workspace.name}
+				>
+					<span>{workspace.name.slice(0, 2).toUpperCase()}</span>
+					{#if (workspace.unreadCount ?? 0) > 0}
+						<i class="absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-abyss bg-signal" aria-label={`${workspace.unreadCount} unread workspace messages`}></i>
+					{/if}
+				</a>
+			{/each}
 		</div>
 	</div>
 

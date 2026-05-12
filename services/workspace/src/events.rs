@@ -10,6 +10,22 @@ pub struct WorkspaceCreatedPayload {
 }
 
 #[derive(Serialize)]
+pub struct WorkspaceUpdatedPayload {
+    pub workspace_id: String,
+    pub name: String,
+    pub icon_url: Option<String>,
+    pub updated_by_user_id: String,
+    pub updated_at: String,
+}
+
+#[derive(Serialize)]
+pub struct WorkspaceDeletedPayload {
+    pub workspace_id: String,
+    pub deleted_by_user_id: String,
+    pub deleted_at: String,
+}
+
+#[derive(Serialize)]
 pub struct WorkspaceMemberAddedPayload {
     pub workspace_id: String,
     pub user_id: String,

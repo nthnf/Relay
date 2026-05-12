@@ -120,6 +120,13 @@ pub struct WorkspaceCreatedPayload {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct WorkspaceDeletedPayload {
+    pub workspace_id: String,
+    pub deleted_by_user_id: String,
+    pub deleted_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 pub struct WorkspaceChannelCreatedPayload {
     pub channel_id: String,
     pub workspace_id: String,

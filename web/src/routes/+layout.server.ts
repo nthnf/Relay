@@ -4,7 +4,7 @@ import { encodeRouteId } from '$lib/server/route-ids';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ request, cookies, url }) => {
-	if (url.pathname.startsWith('/auth/')) {
+	if (url.pathname === '/' || url.pathname.startsWith('/auth/')) {
 		return { sidebar: null };
 	}
 

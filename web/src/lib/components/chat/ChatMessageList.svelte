@@ -28,7 +28,7 @@
 				<div class="mx-auto w-fit rounded-full border border-warm-charcoal bg-carbon px-4 py-1.5 text-xs text-parchment">Today</div>
 			{/if}
 			{#each messages as message (message.messageId)}
-				<ChatMessageBlock {message} {variant} {currentUserId} accent={variant === 'dm' && message.outgoing ? 'right' : 'left'} />
+				<ChatMessageBlock {message} {variant} {currentUserId} accent={message.outgoing ? 'right' : 'left'} />
 			{/each}
 		</div>
 	{/if}

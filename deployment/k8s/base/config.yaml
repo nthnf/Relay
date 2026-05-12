@@ -11,8 +11,6 @@ data:
   OUTBOX_RETRY_DELAY_SECS: "10"
   OUTBOX_MAX_PUBLISH_ATTEMPTS: "10"
   PUBLIC_WEB_BASE_URL: http://localhost:5173
-  SMTP_PROVIDER_NAME: local
-  SENDER_EMAIL: noreply@relay.local
   SENDER_NAME: Relay Local
   WORKSPACE_SERVICE_URL: http://workspace:50051
   REALTIME_SERVICE_URL: http://realtime:50051
@@ -25,7 +23,6 @@ metadata:
 type: Opaque
 stringData:
   TOKEN_SECRET: local-dev-token-secret-change-me
-  SMTP_URL: smtp://mailpit:1025
 ---
 apiVersion: v1
 kind: Secret

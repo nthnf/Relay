@@ -72,11 +72,11 @@
 <article
 	class={[
 		'flex w-full gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-warm-charcoal/25',
-		variant === 'dm' && message.outgoing && 'justify-end'
+		message.outgoing && 'justify-end'
 	]}
 	oncontextmenu={openContextMenu}
 >
-	{#if !(variant === 'dm' && message.outgoing)}
+	{#if !message.outgoing}
 		<div class="hidden h-9 w-9 shrink-0 place-items-center rounded-full border border-warm-charcoal bg-[radial-gradient(circle_at_35%_20%,var(--color-mint),var(--color-carbon)_70%)] font-[system-ui,sans-serif] text-xs font-bold md:grid">
 			{message.senderName.slice(0, 1).toUpperCase()}
 		</div>
@@ -112,7 +112,7 @@
 		{/if}
 	</div>
 
-	{#if variant === 'dm' && message.outgoing}
+	{#if message.outgoing}
 		<div class="hidden h-9 w-9 shrink-0 place-items-center rounded-full border border-warm-charcoal bg-[radial-gradient(circle_at_35%_20%,var(--color-mint),var(--color-carbon)_70%)] font-[system-ui,sans-serif] text-xs font-bold md:grid">
 			{message.senderName.slice(0, 1).toUpperCase()}
 		</div>

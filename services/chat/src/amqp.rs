@@ -1,5 +1,8 @@
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, IntoActiveModel, Set};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
+    Set,
+};
 use std::sync::Arc;
 use tracing::error;
 use uuid::Uuid;
@@ -8,7 +11,7 @@ use crate::{
     entity::{user_snapshot, workspace_channel_snapshot, workspace_snapshot},
     events::{
         UserEmailVerifiedPayload, UserProfileUpdatedPayload, UserRegisteredPayload,
-        WorkspaceChannelCreatedPayload, WorkspaceCreatedPayload,
+        WorkspaceChannelCreatedPayload, WorkspaceCreatedPayload, WorkspaceDeletedPayload,
     },
 };
 use relay_amqp::{
@@ -131,6 +134,26 @@ impl Handler {
         Ok(())
     }
 
+    pub async fn handle_workspace_deleted(
+        self: Arc<Self>,
+        _delivery: DeliveryContext,
+        payload: WorkspaceDeletedPayload,
+    ) -> EventHandleResult {
+        let workspace_id = parse_uuid(&payload.workspace_id, "workspace_id")?;
+
+        workspace_channel_snapshot::Entity::delete_many()
+            .filter(workspace_channel_snapshot::Column::WorkspaceId.eq(workspace_id))
+            .exec(&self.db)
+            .await
+            .map_err(db_write_error("Workspace channel snapshot delete failed"))?;
+        workspace_snapshot::Entity::delete_by_id(workspace_id)
+            .exec(&self.db)
+            .await
+            .map_err(db_write_error("Workspace snapshot delete failed"))?;
+
+        Ok(())
+    }
+
     async fn upsert_user_snapshot(&self, user_id: &str) -> EventHandleResult {
         let user_id = parse_uuid(user_id, "user_id")?;
         let now = Utc::now();
@@ -183,6 +206,10 @@ impl RegistersAmqpRoutes for Handler {
             .event(
                 "workspace.WorkspaceCreated",
                 route(Self::handle_workspace_created),
+            )
+            .event(
+                "workspace.WorkspaceDeleted",
+                route(Self::handle_workspace_deleted),
             )
             .event(
                 "workspace.WorkspaceChannelCreated",
